@@ -9,11 +9,11 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -- ============================================================
--- MUTUAL EXCLUSION GLOBAL
+-- INISIALISASI GLOBAL UNTUK MUTUAL EXCLUSION
 -- ============================================================
 _G.ACTIVE_MODULE = nil      -- "Leveling" atau "AutoShark"
-_G.LEVELING_TOGGLE = nil
-_G.AUTO_SHARK_TOGGLE = nil
+_G.LEVELING_TOGGLE = nil    -- referensi toggle leveling
+_G.AUTO_SHARK_TOGGLE = nil  -- referensi toggle auto shark
 
 -- ============================================================
 -- LOAD DATAPETMODULE
@@ -48,10 +48,12 @@ local LevelingModule
 local levelingLoadSuccess, levelingLoadResult = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/Leveling.lua"))()
 end)
+
+local levelingTab = nil
 if levelingLoadSuccess and levelingLoadResult then
     LevelingModule = levelingLoadResult
     if type(LevelingModule.Setup) == "function" then
-        LevelingModule.Setup(Window, DataPetModule, Fluent)
+        levelingTab = LevelingModule.Setup(Window, DataPetModule, Fluent)
         print("[Main] Leveling.lua berhasil dimuat dan dijalankan")
     else
         warn("[Main] Leveling.lua tidak memiliki fungsi Setup")
@@ -105,12 +107,18 @@ else
 end
 
 -- ============================================================
--- PILIH TAB LEVELING SECARA AMAN
+-- PILIH TAB LEVELING SECARA PROGRAMMATIS
 -- ============================================================
-task.wait(0.5)
-pcall(function()
-    Window:SelectTab("Leveling")
-end)
+task.wait(0.5) -- beri waktu untuk semua tab selesai dibuat
+if levelingTab and type(levelingTab.Select) == "function" then
+    levelingTab:Select()
+    print("[Main] Tab Leveling dipilih secara otomatis")
+else
+    -- Fallback: coba dengan method lain
+    pcall(function()
+        Window:SelectTab("Leveling")
+    end)
+end
 
 -- ============================================================
 -- SETUP SAVEMANAGER & INTERFACEMANAGER
