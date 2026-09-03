@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - FINAL dengan urutan benar
+-- AutoShark.lua - FINAL (working)
 -- ============================================================
 
 local AutoShark = {}
@@ -261,11 +261,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         else
             contentText = "Belum ada pet dipilih (Tim Shark)"
         end
-        if infoParagraphShark.SetContent then
-            infoParagraphShark:SetContent(contentText)
-        else
-            infoParagraphShark.Content = contentText
-        end
+        infoParagraphShark:SetContent(contentText)
     end
 
     local function updatePetInfoTarget(uuids)
@@ -285,11 +281,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         else
             contentText = "Belum ada pet dipilih (Target)"
         end
-        if infoParagraphTarget.SetContent then
-            infoParagraphTarget:SetContent(contentText)
-        else
-            infoParagraphTarget.Content = contentText
-        end
+        infoParagraphTarget:SetContent(contentText)
     end
 
     local function updatePetInfoTumbal(uuids)
@@ -309,15 +301,11 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         else
             contentText = "Belum ada pet dipilih (Tumbal)"
         end
-        if infoParagraphTumbal.SetContent then
-            infoParagraphTumbal:SetContent(contentText)
-        else
-            infoParagraphTumbal.Content = contentText
-        end
+        infoParagraphTumbal:SetContent(contentText)
     end
 
     -- ============================================================
-    -- REFRESH DROPDOWN (LABEL)
+    -- REFRESH DROPDOWN
     -- ============================================================
     local function refreshPetDropdownShark()
         if not DataPetModule then return end
@@ -423,7 +411,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             updatePetInfoTumbal({})
             return
         end
-        -- Filter berdasarkan mutasi
         local filtered = {}
         if selectedMutation then
             for _, pet in ipairs(pets) do
@@ -515,10 +502,9 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
-    -- UI COMPONENTS - URUTAN BENAR: buat infoParagraph dulu
+    -- UI COMPONENTS
     -- ============================================================
     local sectionShark = AutoSharkTab:AddSection("Pilih Tim Auto Shark (Favorit)")
-    -- Buat info paragraph sebelum dropdown
     infoParagraphShark = sectionShark:AddParagraph({ Title = "Tim Shark", Content = "Belum ada pet dipilih (Tim Shark)" })
     dropdownControlShark = sectionShark:AddDropdown("PetDropdownShark", {
         Title = "Daftar Pet Favorite (Min 2: 1 Shark + 1 Mimic)",
@@ -537,6 +523,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             selectedUUIDsShark = uuids
             _G[SAVE_KEY_SHARK] = uuids
             updatePetInfoShark(uuids)
+            print("[AutoShark] SHARK SELECTED:", #uuids)
         end
     })
     sectionShark:AddButton({ Title = "↻ Refresh Daftar Shark", Callback = function() refreshPetDropdownShark() end })
@@ -560,6 +547,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             selectedUUIDsTarget = uuids
             _G[SAVE_KEY_TARGET] = uuids
             updatePetInfoTarget(uuids)
+            print("[AutoShark] TARGET SELECTED:", #uuids)
         end
     })
     sectionTarget:AddButton({ Title = "↻ Refresh Daftar Target", Callback = function() refreshPetDropdownTarget() end })
@@ -583,6 +571,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             selectedUUIDsTumbal = uuids
             _G[SAVE_KEY_TUMBAL] = uuids
             updatePetInfoTumbal(uuids)
+            print("[AutoShark] TUMBAL SELECTED:", #uuids)
         end
     })
     sectionTumbal:AddButton({ Title = "↻ Refresh Daftar Tumbal", Callback = function() refreshPetDropdownTumbal() end })
