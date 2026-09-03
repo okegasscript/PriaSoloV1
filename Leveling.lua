@@ -1,19 +1,13 @@
 -- ============================================================
--- Leveling.lua - Modul Terpisah untuk Tab Leveling
+-- Leveling.lua - Modul Tab Leveling
 -- ============================================================
 
 local Leveling = {}
 
--- ============================================================
--- FUNGSI UTAMA: Setup Tab Leveling
--- ============================================================
 function Leveling.Setup(Window, DataPetModule, Fluent)
-    -- Buat Tab Leveling
     local LevelingTab = Window:AddTab({ Title = "Leveling" })
 
-    -- ============================================================
-    -- VARIABEL GLOBAL LEVELING
-    -- ============================================================
+    -- Variabel lokal
     local petOptionsLvl = {}
     local selectedPetsLvl = {}
     local selectedUUIDsLvl = {}
@@ -34,25 +28,19 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     local TARGET_KEY = "TargetLevel"
     local ENABLE_KEY = "AutoLevelEnabled"
 
-    -- ============================================================
-    -- FUNGSI UPDATE INFO PET LEVELING (Favorite)
-    -- ============================================================
+    -- Update info favorite
     local function updatePetInfoLvl(pets)
         if not infoParagraphLvl then return end
         local contentText
         if pets and #pets > 0 then
             local lines = {}
             for i, pet in ipairs(pets) do
-                table.insert(lines, string.format(
-                    "%d. %s %s %.2fkg Lv%d",
-                    i, pet.mutation, pet.name, pet.weight, pet.level
-                ))
+                table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
             end
             contentText = "Pet Tim Leveling:\n" .. table.concat(lines, "\n")
         else
             contentText = "Belum ada pet dipilih (Tim Leveling)"
         end
-
         if infoParagraphLvl.SetContent then
             infoParagraphLvl:SetContent(contentText)
         else
@@ -60,25 +48,19 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- ============================================================
-    -- FUNGSI UPDATE INFO TARGET LEVELING
-    -- ============================================================
+    -- Update info target
     local function updatePetInfoTarget(pets)
         if not infoParagraphTarget then return end
         local contentText
         if pets and #pets > 0 then
             local lines = {}
             for i, pet in ipairs(pets) do
-                table.insert(lines, string.format(
-                    "%d. %s %s %.2fkg Lv%d",
-                    i, pet.mutation, pet.name, pet.weight, pet.level
-                ))
+                table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
             end
             contentText = "Pet Target (Non-Favorit):\n" .. table.concat(lines, "\n")
         else
             contentText = "Belum ada pet dipilih (Target Non-Favorit)"
         end
-
         if infoParagraphTarget.SetContent then
             infoParagraphTarget:SetContent(contentText)
         else
@@ -86,15 +68,12 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- ============================================================
-    -- FUNGSI REFRESH DROPDOWN LEVELING (Favorite)
-    -- ============================================================
+    -- Refresh favorite
     local function refreshPetDropdownLvl()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
             return
         end
-
         local pets = DataPetModule.findPets({ isFavorite = true })
         if #pets == 0 then
             Fluent:Notify({ Title = "Info", Description = "Tidak ada pet favorite ditemukan", Duration = 5 })
@@ -103,7 +82,6 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
             updatePetInfoLvl({})
             return
         end
-
         local values = {}
         petOptionsLvl = {}
         for _, pet in ipairs(pets) do
@@ -111,7 +89,6 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
             table.insert(values, label)
             petOptionsLvl[label] = pet
         end
-
         if dropdownControlLvl then
             dropdownControlLvl:SetValues(values)
             local savedUUIDs = _G[SAVE_KEY_LVL]
@@ -144,15 +121,12 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- ============================================================
-    -- FUNGSI REFRESH DROPDOWN TARGET (Non-Favorit)
-    -- ============================================================
+    -- Refresh target
     local function refreshPetDropdownTarget()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
             return
         end
-
         local pets = DataPetModule.findPets({ isFavorite = false })
         if #pets == 0 then
             Fluent:Notify({ Title = "Info", Description = "Tidak ada pet non-favorit ditemukan", Duration = 5 })
@@ -161,7 +135,6 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
             updatePetInfoTarget({})
             return
         end
-
         local values = {}
         petOptionsTarget = {}
         for _, pet in ipairs(pets) do
@@ -169,7 +142,6 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
             table.insert(values, label)
             petOptionsTarget[label] = pet
         end
-
         if dropdownControlTarget then
             dropdownControlTarget:SetValues(values)
             local savedUUIDs = _G[SAVE_KEY_TARGET]
@@ -202,9 +174,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- ============================================================
-    -- BUAT KOMPONEN LEVELING
-    -- ============================================================
+    -- Section favorite
     local sectionLvl = LevelingTab:AddSection("Pilih Pet Tim Leveling Favorit")
     dropdownControlLvl = sectionLvl:AddDropdown("PetDropdownLvl", {
         Title = "Daftar Pet Favorite",
@@ -233,6 +203,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     sectionLvl:AddButton({ Title = "↻ Refresh Daftar Favorite", Callback = function() refreshPetDropdownLvl() end })
     infoParagraphLvl = sectionLvl:AddParagraph({ Title = "Pet Tim Leveling", Content = "Belum ada pet dipilih (Tim Leveling)" })
 
+    -- Section target
     local sectionTarget = LevelingTab:AddSection("Pilih Target Leveling (Non-Favorit)")
     dropdownControlTarget = sectionTarget:AddDropdown("PetDropdownTarget", {
         Title = "Daftar Pet Non-Favorit",
@@ -261,9 +232,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     sectionTarget:AddButton({ Title = "↻ Refresh Daftar Target", Callback = function() refreshPetDropdownTarget() end })
     infoParagraphTarget = sectionTarget:AddParagraph({ Title = "Pet Target (Non-Favorit)", Content = "Belum ada pet dipilih (Target Non-Favorit)" })
 
-    -- ============================================================
-    -- PENGATURAN LEVELING
-    -- ============================================================
+    -- Pengaturan
     local controlSectionLvl = LevelingTab:AddSection("Pengaturan Leveling")
     local targetInput = controlSectionLvl:AddInput("TargetLevelInput", {
         Title = "Target Level",
@@ -296,14 +265,10 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         end
     })
 
-    -- ============================================================
-    -- MUAT DATA PERTAMA KALI
-    -- ============================================================
+    -- Load awal
     task.wait(0.5)
     refreshPetDropdownLvl()
     refreshPetDropdownTarget()
-
-    -- Restore state
     if _G[TARGET_KEY] then
         targetLevel = _G[TARGET_KEY]
         targetInput:SetValue(tostring(targetLevel))
@@ -313,7 +278,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         autoToggle:SetValue(autoLevelEnabled)
     end
 
-    print("[Leveling.lua] Tab Leveling selesai dimuat!")
+    print("[Leveling.lua] Tab Leveling siap.")
 end
 
 return Leveling
