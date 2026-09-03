@@ -7,31 +7,32 @@ local AutoShark = {}
 function AutoShark.Setup(Window, DataPetModule, Fluent)
     local AutoSharkTab = Window:AddTab({ Title = "AutoShark" })
 
-    -- Tim Auto Shark (Favorite)
+    -- Variabel
     local petOptionsShark = {}
     local selectedPetsShark = {}
     local selectedUUIDsShark = {}
     local dropdownControlShark = nil
     local infoParagraphShark = nil
 
-    -- Target Pet (Non-Favorit)
     local petOptionsSharkTarget = {}
     local selectedPetsSharkTarget = {}
     local selectedUUIDsSharkTarget = {}
     local dropdownControlSharkTarget = nil
     local infoParagraphSharkTarget = nil
 
-    -- Target Mutasi (single select)
     local mutationOptions = {}
     local selectedMutation = nil
     local dropdownControlMutation = nil
 
+    local autoSharkEnabled = false
+    local autoToggleRef = nil
+
     local SAVE_KEY_SHARK = "SelectedPetUUIDs_Shark"
     local SAVE_KEY_SHARK_TARGET = "SelectedPetUUIDs_SharkTarget"
     local SAVE_KEY_MUTATION = "SelectedMutation"
-    local SHARK_ENABLE_KEY = "AutoSharkEnabled"
+    local ENABLE_KEY = "AutoSharkEnabled"
 
-    -- Update info shark
+    -- Update info
     local function updatePetInfoShark(pets)
         if not infoParagraphShark then return end
         local contentText
@@ -51,7 +52,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- Update info target shark
     local function updatePetInfoSharkTarget(pets)
         if not infoParagraphSharkTarget then return end
         local contentText
@@ -71,7 +71,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- Refresh shark favorite
+    -- Refresh
     local function refreshPetDropdownShark()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
@@ -124,7 +124,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- Refresh shark target (non-favorit)
     local function refreshPetDropdownSharkTarget()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
@@ -177,7 +176,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- Refresh mutasi (unique dari semua pet)
     local function refreshMutationDropdown()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
@@ -215,7 +213,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- UI Shark
+    -- UI
     local sectionShark = AutoSharkTab:AddSection("Pilih Tim Auto Shark (Favorit)")
     dropdownControlShark = sectionShark:AddDropdown("PetDropdownShark", {
         Title = "Daftar Pet Favorite",
@@ -244,7 +242,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     sectionShark:AddButton({ Title = "↻ Refresh Daftar Shark", Callback = function() refreshPetDropdownShark() end })
     infoParagraphShark = sectionShark:AddParagraph({ Title = "Tim Auto Shark", Content = "Belum ada pet dipilih (Tim Auto Shark)" })
 
-    -- UI Target Shark
     local sectionSharkTarget = AutoSharkTab:AddSection("Pilih Target Pet (Non-Favorit)")
     dropdownControlSharkTarget = sectionSharkTarget:AddDropdown("PetDropdownSharkTarget", {
         Title = "Daftar Pet Non-Favorit",
@@ -273,7 +270,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     sectionSharkTarget:AddButton({ Title = "↻ Refresh Daftar Target", Callback = function() refreshPetDropdownSharkTarget() end })
     infoParagraphSharkTarget = sectionSharkTarget:AddParagraph({ Title = "Target Shark", Content = "Belum ada pet dipilih (Target Shark)" })
 
-    -- UI Mutasi
     local sectionMutation = AutoSharkTab:AddSection("Pilih Target Mutasi")
     dropdownControlMutation = sectionMutation:AddDropdown("MutationDropdown", {
         Title = "Daftar Mutasi",
@@ -293,22 +289,26 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     })
     sectionMutation:AddButton({ Title = "↻ Refresh Daftar Mutasi", Callback = function() refreshMutationDropdown() end })
 
-    -- Pengaturan AutoShark
+    -- Pengaturan AutoShark (dengan toggle)
     local controlSectionShark = AutoSharkTab:AddSection("Pengaturan AutoShark")
-    local autoSharkToggle = controlSectionShark:AddToggle("AutoSharkToggle", {
+    autoToggleRef = controlSectionShark:AddToggle("AutoSharkToggle", {
         Title = "Auto Shark",
         Description = "Aktifkan untuk menjalankan Auto Shark",
-        Default = _G[SHARK_ENABLE_KEY] or false,
+        Default = _G[ENABLE_KEY] or false,
         Callback = function(value)
             if value then
+                -- Matikan Leveling jika menyala
                 if _G.ACTIVE_MODULE == "Leveling" and _G.LEVELING_TOGGLE then
                     _G.LEVELING_TOGGLE:SetValue(false)
                 end
                 _G.ACTIVE_MODULE = "AutoShark"
-                _G[SHARK_ENABLE_KEY] = true
+                _G[ENABLE_KEY] = true
+                autoSharkEnabled = true
                 Fluent:Notify({ Title = "Auto Shark", Description = "Auto Shark diaktifkan!", Duration = 3 })
+                -- Di sini nanti bisa ditambahkan logika AutoShark
             else
-                _G[SHARK_ENABLE_KEY] = false
+                _G[ENABLE_KEY] = false
+                autoSharkEnabled = false
                 if _G.ACTIVE_MODULE == "AutoShark" then
                     _G.ACTIVE_MODULE = nil
                 end
@@ -316,19 +316,19 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             end
         end
     })
-    _G.AUTO_SHARK_TOGGLE = autoSharkToggle
+    _G.AUTO_SHARK_TOGGLE = autoToggleRef
 
     -- Load awal
     task.wait(0.5)
     refreshPetDropdownShark()
     refreshPetDropdownSharkTarget()
     refreshMutationDropdown()
-    if _G[SHARK_ENABLE_KEY] ~= nil then
-        autoSharkToggle:SetValue(_G[SHARK_ENABLE_KEY])
+    if _G[ENABLE_KEY] ~= nil then
+        autoSharkEnabled = _G[ENABLE_KEY]
+        autoToggleRef:SetValue(autoSharkEnabled)
     end
 
     print("[AutoShark.lua] Tab AutoShark siap.")
-    return AutoSharkTab
 end
 
 return AutoShark
