@@ -250,13 +250,14 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
             end
         end
     })
+
+    -- Toggle dengan mutual exclusion
     local autoToggle = controlSectionLvl:AddToggle("AutoLevelToggle", {
         Title = "Auto Leveling",
         Description = "Aktifkan untuk mulai leveling otomatis",
         Default = _G[ENABLE_KEY] or false,
         Callback = function(value)
             if value then
-                -- Matikan AutoShark jika menyala
                 if _G.ACTIVE_MODULE == "AutoShark" and _G.AUTO_SHARK_TOGGLE then
                     _G.AUTO_SHARK_TOGGLE:SetValue(false)
                 end
@@ -288,6 +289,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     end
 
     print("[Leveling.lua] Tab Leveling siap.")
+    return LevelingTab -- return tab object
 end
 
 return Leveling
