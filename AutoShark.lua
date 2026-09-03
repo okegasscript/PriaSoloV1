@@ -1,6 +1,5 @@
 -- ============================================================
--- AutoShark.lua - Modul Tab AutoShark (FINAL)
--- Logika: Tim Shark (Favorit) + Target (Non-Favorit) + Tumbal (Non-Favorit dengan mutasi tertentu)
+-- AutoShark.lua - Modul Tab AutoShark (FINAL dengan Debug)
 -- ============================================================
 
 local AutoShark = {}
@@ -23,31 +22,26 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     local dropdownControlTarget = nil
     local infoParagraphTarget = nil
 
-    -- Tumbal
     local petOptionsTumbal = {}
     local selectedPetsTumbal = {}
     local selectedUUIDsTumbal = {}
     local dropdownControlTumbal = nil
     local infoParagraphTumbal = nil
 
-    -- Mutasi
     local mutationOptions = {}
     local selectedMutation = nil
     local dropdownControlMutation = nil
 
-    -- State
     local autoSharkEnabled = false
     local autoToggleRef = nil
     local sharkCoroutine = nil
 
-    -- Keys
     local SAVE_KEY_SHARK = "SelectedPetUUIDs_Shark"
     local SAVE_KEY_TARGET = "SelectedPetUUIDs_SharkTarget"
     local SAVE_KEY_TUMBAL = "SelectedPetUUIDs_SharkTumbal"
     local SAVE_KEY_MUTATION = "SelectedMutation_Shark"
     local ENABLE_KEY = "AutoSharkEnabled"
 
-    -- CFrame garden
     local GARDEN_CFRAME = CFrame.new(-16.000007629395, 4, -116.50244903564, 1, 0, 0, 0, 1, 0, 0, 0, 1)
 
     -- ============================================================
@@ -106,9 +100,24 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
-    -- FUNGSI VALIDASI SEBELUM START
+    -- VALIDASI + PRINT DEBUG
     -- ============================================================
     local function validateBeforeStart()
+        print("=== VALIDASI AUTOSHARK ===")
+        print("Tim Shark (selectedPetsShark):", #selectedPetsShark)
+        for i, pet in ipairs(selectedPetsShark) do
+            print("  Shark", i, pet.name, pet.mutation, pet.uuid)
+        end
+        print("Target (selectedPetsTarget):", #selectedPetsTarget)
+        for i, pet in ipairs(selectedPetsTarget) do
+            print("  Target", i, pet.name, pet.mutation, pet.uuid)
+        end
+        print("Tumbal (selectedPetsTumbal):", #selectedPetsTumbal)
+        for i, pet in ipairs(selectedPetsTumbal) do
+            print("  Tumbal", i, pet.name, pet.mutation, pet.uuid)
+        end
+        print("Mutasi Terpilih:", selectedMutation)
+
         if #selectedPetsShark == 0 then
             Fluent:Notify({ Title = "Error", Description = "Pilih tim shark terlebih dahulu! (min 2 pet favorit, 1 di antaranya Mimic)", Duration = 5 })
             return false
@@ -126,14 +135,12 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             return false
         end
 
-        -- Cek mimic
         local mimicUUID = findMimicUUID(selectedUUIDsShark)
         if not mimicUUID then
             Fluent:Notify({ Title = "Error", Description = "Tidak ada pet dengan mutasi 'Mimic' di tim shark!", Duration = 5 })
             return false
         end
 
-        -- Cek shark selain mimic
         local sharkCount = 0
         for _, uuid in ipairs(selectedUUIDsShark) do
             if uuid ~= mimicUUID then
@@ -145,11 +152,12 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             return false
         end
 
+        print("=== VALIDASI BERHASIL ===")
         return true
     end
 
     -- ============================================================
-    -- LOGIKA UTAMA AUTOSHARK
+    -- LOGIKA UTAMA
     -- ============================================================
     local function startAutoShark()
         if sharkCoroutine and coroutine.status(sharkCoroutine) ~= "dead" then
@@ -157,7 +165,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
 
         if not validateBeforeStart() then
-            -- Matikan toggle
             if autoToggleRef then autoToggleRef:SetValue(false) end
             autoSharkEnabled = false
             _G[ENABLE_KEY] = false
@@ -165,7 +172,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             return
         end
 
-        -- Cari mimic dan shark
         local sharkUUIDs = selectedUUIDsShark
         local mimicUUID = findMimicUUID(sharkUUIDs)
         local sharkOnlyUUIDs = {}
@@ -175,19 +181,22 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             end
         end
 
+        print("[AutoShark] Mimic UUID:", mimicUUID)
+        print("[AutoShark] Shark UUIDs:", table.concat(sharkOnlyUUIDs, ", "))
+
         sharkCoroutine = coroutine.create(function()
             while autoSharkEnabled do
-                -- 1. Unequip semua pet di garden
+                -- 1. Unequip semua
                 unequipAllEquipped()
                 task.wait(0.5)
 
-                -- 2. Equip semua tim shark (termasuk mimic)
+                -- 2. Equip semua tim shark
                 for _, uuid in ipairs(sharkUUIDs) do
                     equipPet(uuid)
                     task.wait(0.3)
                 end
 
-                -- 3. Proses setiap target satu per satu
+                -- 3. Proses target satu per satu
                 local targetQueue = {}
                 for _, pet in ipairs(selectedPetsTarget) do
                     table.insert(targetQueue, pet)
@@ -198,42 +207,37 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                     local targetUUID = currentTarget.uuid
                     local targetReachedMutation = false
 
-                    -- Ulangi siklus untuk target ini sampai mencapai mutasi yang diinginkan
                     while not targetReachedMutation and autoSharkEnabled do
-                        -- Tunggu mimic cooldown == 0 (ready)
+                        -- Tunggu mimic ready
                         local mimicCooldown = DataPetModule.getCooldown(mimicUUID)
                         while (mimicCooldown ~= nil and mimicCooldown > 0) and autoSharkEnabled do
                             task.wait(0.5)
                             mimicCooldown = DataPetModule.getCooldown(mimicUUID)
                         end
-
                         if not autoSharkEnabled then break end
 
-                        -- Mimic ready, lakukan siklus
-                        -- Unequip shark (kecuali mimic)
+                        -- Unequip shark
                         for _, uuid in ipairs(sharkOnlyUUIDs) do
                             unequipPet(uuid)
                             task.wait(0.3)
                         end
 
-                        -- Equip target dan tumbal (ambil tumbal pertama dari daftar)
-                        local tumbalUUID = selectedUUIDsTumbal[1] -- bisa diganti round-robin
+                        -- Equip target + tumbal
+                        local tumbalUUID = selectedUUIDsTumbal[1]
                         equipPet(targetUUID)
                         task.wait(0.3)
                         equipPet(tumbalUUID)
                         task.wait(0.3)
 
-                        -- Tunggu sampai mimic cooldown >= 8 detik
+                        -- Tunggu mimic cooldown >= 8
                         mimicCooldown = DataPetModule.getCooldown(mimicUUID)
                         while (mimicCooldown == nil or mimicCooldown < 8) and autoSharkEnabled do
                             task.wait(0.5)
                             mimicCooldown = DataPetModule.getCooldown(mimicUUID)
                         end
-
                         if not autoSharkEnabled then break end
 
-                        -- Mimic cooldown >= 8, siklus selesai
-                        -- Unequip target dan tumbal
+                        -- Unequip target + tumbal
                         unequipPet(targetUUID)
                         task.wait(0.3)
                         unequipPet(tumbalUUID)
@@ -245,21 +249,18 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                             task.wait(0.3)
                         end
 
-                        -- Cek apakah target sudah mencapai mutasi yang diinginkan
+                        -- Cek mutasi target
                         local freshTarget = DataPetModule.findPet({ uuid = targetUUID })
                         if freshTarget and freshTarget.mutation == selectedMutation then
                             targetReachedMutation = true
                             Fluent:Notify({ Title = "AutoShark", Description = "Target " .. freshTarget.name .. " mencapai mutasi " .. selectedMutation, Duration = 3 })
                         end
-                    end -- end while targetReachedMutation
+                    end
+                end
 
-                    -- Target selesai, lanjut ke target berikutnya
-                end -- end while targetQueue
-
-                -- 4. Semua target selesai, unequip semua
+                -- 4. Selesai semua target
                 unequipAllEquipped()
 
-                -- 5. Matikan toggle otomatis
                 if autoSharkEnabled then
                     autoSharkEnabled = false
                     _G[ENABLE_KEY] = false
@@ -380,6 +381,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedUUIDsShark = {}
                 for _, pet in ipairs(selected) do table.insert(selectedUUIDsShark, pet.uuid) end
                 updatePetInfoShark(selected)
+                print("[AutoShark] Shark terpilih:", #selectedPetsShark)
             else
                 dropdownControlShark:SetValue({})
                 selectedPetsShark = {}; selectedUUIDsShark = {}
@@ -432,6 +434,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedUUIDsTarget = {}
                 for _, pet in ipairs(selected) do table.insert(selectedUUIDsTarget, pet.uuid) end
                 updatePetInfoTarget(selected)
+                print("[AutoShark] Target terpilih:", #selectedPetsTarget)
             else
                 dropdownControlTarget:SetValue({})
                 selectedPetsTarget = {}; selectedUUIDsTarget = {}
@@ -440,7 +443,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- Refresh tumbal (filter berdasarkan mutasi yang dipilih)
     local function refreshPetDropdownTumbal()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
@@ -454,7 +456,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             updatePetInfoTumbal({})
             return
         end
-        -- Filter berdasarkan mutasi yang dipilih
         local filtered = {}
         if selectedMutation then
             for _, pet in ipairs(pets) do
@@ -465,7 +466,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         else
             filtered = pets
         end
-
         if #filtered == 0 then
             Fluent:Notify({ Title = "Info", Description = "Tidak ada pet dengan mutasi " .. (selectedMutation or "terpilih"), Duration = 5 })
             if dropdownControlTumbal then dropdownControlTumbal:SetValues({}) end
@@ -473,7 +473,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             updatePetInfoTumbal({})
             return
         end
-
         local values = {}
         petOptionsTumbal = {}
         for _, pet in ipairs(filtered) do
@@ -505,6 +504,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedUUIDsTumbal = {}
                 for _, pet in ipairs(selected) do table.insert(selectedUUIDsTumbal, pet.uuid) end
                 updatePetInfoTumbal(selected)
+                print("[AutoShark] Tumbal terpilih:", #selectedPetsTumbal)
             else
                 dropdownControlTumbal:SetValue({})
                 selectedPetsTumbal = {}; selectedUUIDsTumbal = {}
@@ -513,7 +513,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- Refresh mutasi
     local function refreshMutationDropdown()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
@@ -548,7 +547,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                     _G[SAVE_KEY_MUTATION] = values[1]
                 end
             end
-            -- Refresh tumbal setelah mutasi berubah
+            print("[AutoShark] Mutasi terpilih:", selectedMutation)
             refreshPetDropdownTumbal()
         end
     end
@@ -556,7 +555,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     -- ============================================================
     -- UI COMPONENTS
     -- ============================================================
-    -- Section: Tim Shark
     local sectionShark = AutoSharkTab:AddSection("Pilih Tim Auto Shark (Favorit)")
     dropdownControlShark = sectionShark:AddDropdown("PetDropdownShark", {
         Title = "Daftar Pet Favorite (Min 2: 1 Shark + 1 Mimic)",
@@ -575,17 +573,21 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedPetsShark = selected; selectedUUIDsShark = uuids
                 _G[SAVE_KEY_SHARK] = uuids
                 updatePetInfoShark(selected)
+                print("[AutoShark] SHARK SELECTED:", #selectedPetsShark, "pets")
+                for i, pet in ipairs(selectedPetsShark) do
+                    print("  ", i, pet.name, pet.mutation, pet.uuid)
+                end
             else
                 selectedPetsShark = {}; selectedUUIDsShark = {}
                 _G[SAVE_KEY_SHARK] = {}
                 updatePetInfoShark({})
+                print("[AutoShark] SHARK SELECTED: None")
             end
         end
     })
     sectionShark:AddButton({ Title = "↻ Refresh Daftar Shark", Callback = function() refreshPetDropdownShark() end })
     infoParagraphShark = sectionShark:AddParagraph({ Title = "Tim Shark", Content = "Belum ada pet dipilih (Tim Shark)" })
 
-    -- Section: Target
     local sectionTarget = AutoSharkTab:AddSection("Pilih Target Pet (Non-Favorit)")
     dropdownControlTarget = sectionTarget:AddDropdown("PetDropdownTarget", {
         Title = "Daftar Pet Non-Favorit",
@@ -604,17 +606,21 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedPetsTarget = selected; selectedUUIDsTarget = uuids
                 _G[SAVE_KEY_TARGET] = uuids
                 updatePetInfoTarget(selected)
+                print("[AutoShark] TARGET SELECTED:", #selectedPetsTarget, "pets")
+                for i, pet in ipairs(selectedPetsTarget) do
+                    print("  ", i, pet.name, pet.mutation, pet.uuid)
+                end
             else
                 selectedPetsTarget = {}; selectedUUIDsTarget = {}
                 _G[SAVE_KEY_TARGET] = {}
                 updatePetInfoTarget({})
+                print("[AutoShark] TARGET SELECTED: None")
             end
         end
     })
     sectionTarget:AddButton({ Title = "↻ Refresh Daftar Target", Callback = function() refreshPetDropdownTarget() end })
     infoParagraphTarget = sectionTarget:AddParagraph({ Title = "Target", Content = "Belum ada pet dipilih (Target)" })
 
-    -- Section: Tumbal
     local sectionTumbal = AutoSharkTab:AddSection("Pilih Tumbal Pet (Non-Favorit dengan Mutasi Target)")
     dropdownControlTumbal = sectionTumbal:AddDropdown("PetDropdownTumbal", {
         Title = "Daftar Pet Tumbal (filter by mutasi)",
@@ -633,17 +639,21 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedPetsTumbal = selected; selectedUUIDsTumbal = uuids
                 _G[SAVE_KEY_TUMBAL] = uuids
                 updatePetInfoTumbal(selected)
+                print("[AutoShark] TUMBAL SELECTED:", #selectedPetsTumbal, "pets")
+                for i, pet in ipairs(selectedPetsTumbal) do
+                    print("  ", i, pet.name, pet.mutation, pet.uuid)
+                end
             else
                 selectedPetsTumbal = {}; selectedUUIDsTumbal = {}
                 _G[SAVE_KEY_TUMBAL] = {}
                 updatePetInfoTumbal({})
+                print("[AutoShark] TUMBAL SELECTED: None")
             end
         end
     })
     sectionTumbal:AddButton({ Title = "↻ Refresh Daftar Tumbal", Callback = function() refreshPetDropdownTumbal() end })
     infoParagraphTumbal = sectionTumbal:AddParagraph({ Title = "Tumbal", Content = "Belum ada pet dipilih (Tumbal)" })
 
-    -- Section: Mutasi
     local sectionMutation = AutoSharkTab:AddSection("Pilih Target Mutasi")
     dropdownControlMutation = sectionMutation:AddDropdown("MutationDropdown", {
         Title = "Daftar Mutasi",
@@ -654,26 +664,26 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             if selected and mutationOptions[selected] then
                 selectedMutation = selected
                 _G[SAVE_KEY_MUTATION] = selected
-                print("[AutoShark] Mutasi dipilih:", selected)
+                print("[AutoShark] MUTASI SELECTED:", selectedMutation)
                 refreshPetDropdownTumbal()
             else
                 selectedMutation = nil
                 _G[SAVE_KEY_MUTATION] = nil
+                print("[AutoShark] MUTASI SELECTED: None")
                 refreshPetDropdownTumbal()
             end
         end
     })
     sectionMutation:AddButton({ Title = "↻ Refresh Daftar Mutasi", Callback = function() refreshMutationDropdown() end })
 
-    -- Section: Pengaturan
     local controlSectionShark = AutoSharkTab:AddSection("Pengaturan AutoShark")
     autoToggleRef = controlSectionShark:AddToggle("AutoSharkToggle", {
         Title = "Auto Shark",
         Description = "Aktifkan untuk menjalankan Auto Shark",
         Default = _G[ENABLE_KEY] or false,
         Callback = function(value)
+            print("[AutoShark] TOGGLE:", value)
             if value then
-                -- Matikan Leveling jika menyala
                 if _G.ACTIVE_MODULE == "Leveling" and _G.LEVELING_TOGGLE then
                     _G.LEVELING_TOGGLE:SetValue(false)
                 end
@@ -689,7 +699,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                     _G.ACTIVE_MODULE = nil
                 end
                 Fluent:Notify({ Title = "Auto Shark", Description = "Auto Shark dinonaktifkan", Duration = 3 })
-                -- Unequip semua
                 unequipAllEquipped()
             end
         end
@@ -710,7 +719,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         autoToggleRef:SetValue(autoSharkEnabled)
     end
 
-    print("[AutoShark.lua] Tab AutoShark siap dengan logika lengkap.")
+    print("[AutoShark.lua] Tab AutoShark siap dengan debug.")
 end
 
 return AutoShark
