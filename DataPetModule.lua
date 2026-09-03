@@ -1,6 +1,7 @@
 -- ============================================================
 -- DataPetModule.lua
 -- Versi Final dengan MUTATION_MAP yang benar
+-- + Fitur: penyesuaian berat otomatis berdasarkan Level pet
 -- ============================================================
 
 local DataPetModule = {}
@@ -58,6 +59,36 @@ function DataPetModule.getAutoMutationName(rawCode)
 end
 
 -- ============================================================
+-- FUNGSI PENYESUAIAN BERAT BERDASARKAN LEVEL/AGE
+-- ============================================================
+-- Formula acuan (terverifikasi dari data kalkulator):
+--   W(A) = (Wh / 11) * (A + 10)
+-- Wh = hatch weight = berat pet di Age/Level 1
+--
+-- Karena data yang tersimpan di game (petData.Weight / BaseWeight)
+-- adalah berat di Level 0, kita konversi dulu ke Wh:
+--   W(0) = (Wh/11) * 10  ->  Wh = W(0) * 11 / 10
+--
+-- Sehingga rumus akhir dalam bentuk BaseWeight (level 0) langsung:
+--   W(level) = BaseWeight0 * (level + 10) / 10
+--
+function DataPetModule.calculateWeightAtLevel(baseWeight0, level)
+    baseWeight0 = tonumber(baseWeight0) or 0
+    level = tonumber(level) or 0
+    if baseWeight0 <= 0 then
+        return 0
+    end
+    local weight = baseWeight0 * (level + 10) / 10
+    return math.floor(weight * 100 + 0.5) / 100 -- bulatkan 2 desimal
+end
+
+-- Kebalikannya: dapatkan hatch weight (Wh / berat di Age 1) dari base level-0
+function DataPetModule.getHatchWeight(baseWeight0)
+    baseWeight0 = tonumber(baseWeight0) or 0
+    return DataPetModule.calculateWeightAtLevel(baseWeight0, 1)
+end
+
+-- ============================================================
 -- FUNGSI MENDAPATKAN DATA PET
 -- ============================================================
 local function findDataService()
@@ -106,7 +137,8 @@ function DataPetModule.findPets(filter)
         local rawMut = petData.MutationType or "Normal"
         local mutation = DataPetModule.getAutoMutationName(rawMut)
         local level = petData.Level or petData.Lvl or 0
-        local weight = petData.Weight or petData.BaseWeight or 0
+        local baseWeight = petData.Weight or petData.BaseWeight or 0
+        local currentWeight = DataPetModule.calculateWeightAtLevel(baseWeight, level)
         local isFavorite = petData.IsFavorite or false
         local passive = petData.Passive or ""
 
@@ -138,12 +170,11 @@ function DataPetModule.findPets(filter)
         if filter.maxLevel and level > filter.maxLevel then
             return false
         end
-        -- Filter minWeight
-        if filter.minWeight and weight < filter.minWeight then
+        -- Filter minWeight / maxWeight sekarang memakai currentWeight (berat aktual sesuai level)
+        if filter.minWeight and currentWeight < filter.minWeight then
             return false
         end
-        -- Filter maxWeight
-        if filter.maxWeight and weight > filter.maxWeight then
+        if filter.maxWeight and currentWeight > filter.maxWeight then
             return false
         end
         -- Filter excludeUUIDs
@@ -158,14 +189,19 @@ function DataPetModule.findPets(filter)
             local petData = pet.PetData or {}
             local rawMut = petData.MutationType or "Normal"
             local mutation = DataPetModule.getAutoMutationName(rawMut)
+            local level = petData.Level or petData.Lvl or 0
+            local baseWeight = petData.Weight or petData.BaseWeight or 0
+            local currentWeight = DataPetModule.calculateWeightAtLevel(baseWeight, level)
+
             table.insert(results, {
                 uuid = uuid,
                 pet = pet,
                 petData = petData,
                 name = pet.PetType or petData.PetType or petData.Name or "Unknown",
                 mutation = mutation,
-                level = petData.Level or petData.Lvl or 0,
-                weight = petData.Weight or petData.BaseWeight or 0,
+                level = level,
+                baseWeight = baseWeight,      -- berat mentah tersimpan (level 0)
+                weight = currentWeight,       -- berat aktual sesuai level saat ini (untuk ditampilkan)
                 isFavorite = petData.IsFavorite or false,
                 passive = petData.Passive or ""
             })
