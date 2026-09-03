@@ -1,5 +1,5 @@
 -- ============================================================
--- Leveling.lua - Modul Tab Leveling (dengan mutual exclusion)
+-- Leveling.lua - Modul Tab Leveling
 -- ============================================================
 
 local Leveling = {}
@@ -232,7 +232,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     sectionTarget:AddButton({ Title = "↻ Refresh Daftar Target", Callback = function() refreshPetDropdownTarget() end })
     infoParagraphTarget = sectionTarget:AddParagraph({ Title = "Pet Target (Non-Favorit)", Content = "Belum ada pet dipilih (Target Non-Favorit)" })
 
-    -- Pengaturan dengan mutual exclusion
+    -- Pengaturan
     local controlSectionLvl = LevelingTab:AddSection("Pengaturan Leveling")
     local targetInput = controlSectionLvl:AddInput("TargetLevelInput", {
         Title = "Target Level",
@@ -250,7 +250,6 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
             end
         end
     })
-
     local autoToggle = controlSectionLvl:AddToggle("AutoLevelToggle", {
         Title = "Auto Leveling",
         Description = "Aktifkan untuk mulai leveling otomatis",
@@ -273,7 +272,6 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
             end
         end
     })
-    -- Simpan referensi toggle
     _G.LEVELING_TOGGLE = autoToggle
 
     -- Load awal
