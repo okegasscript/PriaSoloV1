@@ -12,8 +12,9 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 -- INISIALISASI GLOBAL UNTUK MUTUAL EXCLUSION
 -- ============================================================
 _G.ACTIVE_MODULE = nil      -- "Leveling" atau "AutoShark"
-_G.LEVELING_TOGGLE = nil    -- referensi toggle leveling
-_G.AUTO_SHARK_TOGGLE = nil  -- referensi toggle auto shark
+_G.LEVELING_TOGGLE = nil
+_G.AUTO_SHARK_TOGGLE = nil
+_G.GardenCFrame = nil       -- akan diisi saat equip pertama
 
 -- ============================================================
 -- LOAD DATAPETMODULE
@@ -42,18 +43,21 @@ local Window = Fluent:CreateWindow({
 })
 
 -- ============================================================
+-- HAPUS PANGGILAN SelectTab YANG BERMASALAH
+-- ============================================================
+-- Tidak perlu langsung pilih tab, biarkan user pilih sendiri
+
+-- ============================================================
 -- LOAD & SETUP LEVELING.LUA
 -- ============================================================
 local LevelingModule
 local levelingLoadSuccess, levelingLoadResult = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/Leveling.lua"))()
 end)
-
-local levelingTab = nil
 if levelingLoadSuccess and levelingLoadResult then
     LevelingModule = levelingLoadResult
     if type(LevelingModule.Setup) == "function" then
-        levelingTab = LevelingModule.Setup(Window, DataPetModule, Fluent)
+        LevelingModule.Setup(Window, DataPetModule, Fluent)
         print("[Main] Leveling.lua berhasil dimuat dan dijalankan")
     else
         warn("[Main] Leveling.lua tidak memiliki fungsi Setup")
@@ -104,20 +108,6 @@ else
     warn("[Main] Gagal memuat AutoShark.lua:", sharkLoadResult)
     local fallbackTab = Window:AddTab({ Title = "AutoShark" })
     fallbackTab:AddParagraph({ Title = "Error", Content = "Gagal memuat AutoShark.lua" })
-end
-
--- ============================================================
--- PILIH TAB LEVELING SECARA PROGRAMMATIS
--- ============================================================
-task.wait(0.5) -- beri waktu untuk semua tab selesai dibuat
-if levelingTab and type(levelingTab.Select) == "function" then
-    levelingTab:Select()
-    print("[Main] Tab Leveling dipilih secara otomatis")
-else
-    -- Fallback: coba dengan method lain
-    pcall(function()
-        Window:SelectTab("Leveling")
-    end)
 end
 
 -- ============================================================
