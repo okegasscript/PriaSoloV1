@@ -7,7 +7,6 @@ local AutoShark = {}
 function AutoShark.Setup(Window, DataPetModule, Fluent)
     local AutoSharkTab = Window:AddTab({ Title = "AutoShark" })
 
-    -- Variabel
     local petOptionsShark = {}
     local selectedPetsShark = {}
     local selectedUUIDsShark = {}
@@ -32,7 +31,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     local SAVE_KEY_MUTATION = "SelectedMutation"
     local ENABLE_KEY = "AutoSharkEnabled"
 
-    -- Update info
     local function updatePetInfoShark(pets)
         if not infoParagraphShark then return end
         local contentText
@@ -71,7 +69,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- Refresh
     local function refreshPetDropdownShark()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
@@ -289,7 +286,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     })
     sectionMutation:AddButton({ Title = "↻ Refresh Daftar Mutasi", Callback = function() refreshMutationDropdown() end })
 
-    -- Pengaturan AutoShark (dengan toggle)
+    -- Pengaturan
     local controlSectionShark = AutoSharkTab:AddSection("Pengaturan AutoShark")
     autoToggleRef = controlSectionShark:AddToggle("AutoSharkToggle", {
         Title = "Auto Shark",
@@ -297,7 +294,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Default = _G[ENABLE_KEY] or false,
         Callback = function(value)
             if value then
-                -- Matikan Leveling jika menyala
                 if _G.ACTIVE_MODULE == "Leveling" and _G.LEVELING_TOGGLE then
                     _G.LEVELING_TOGGLE:SetValue(false)
                 end
@@ -305,7 +301,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 _G[ENABLE_KEY] = true
                 autoSharkEnabled = true
                 Fluent:Notify({ Title = "Auto Shark", Description = "Auto Shark diaktifkan!", Duration = 3 })
-                -- Di sini nanti bisa ditambahkan logika AutoShark
             else
                 _G[ENABLE_KEY] = false
                 autoSharkEnabled = false
