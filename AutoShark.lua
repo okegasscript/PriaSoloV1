@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - Modul Tab AutoShark
+-- AutoShark.lua - Modul Tab AutoShark (FINAL)
 -- Logika: Tim Shark (Favorit) + Target (Non-Favorit) + Tumbal (Non-Favorit dengan mutasi tertentu)
 -- ============================================================
 
@@ -106,6 +106,49 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
+    -- FUNGSI VALIDASI SEBELUM START
+    -- ============================================================
+    local function validateBeforeStart()
+        if #selectedPetsShark == 0 then
+            Fluent:Notify({ Title = "Error", Description = "Pilih tim shark terlebih dahulu! (min 2 pet favorit, 1 di antaranya Mimic)", Duration = 5 })
+            return false
+        end
+        if #selectedPetsTarget == 0 then
+            Fluent:Notify({ Title = "Error", Description = "Pilih target terlebih dahulu!", Duration = 5 })
+            return false
+        end
+        if #selectedPetsTumbal == 0 then
+            Fluent:Notify({ Title = "Error", Description = "Pilih tumbal terlebih dahulu!", Duration = 5 })
+            return false
+        end
+        if not selectedMutation then
+            Fluent:Notify({ Title = "Error", Description = "Pilih target mutasi!", Duration = 5 })
+            return false
+        end
+
+        -- Cek mimic
+        local mimicUUID = findMimicUUID(selectedUUIDsShark)
+        if not mimicUUID then
+            Fluent:Notify({ Title = "Error", Description = "Tidak ada pet dengan mutasi 'Mimic' di tim shark!", Duration = 5 })
+            return false
+        end
+
+        -- Cek shark selain mimic
+        local sharkCount = 0
+        for _, uuid in ipairs(selectedUUIDsShark) do
+            if uuid ~= mimicUUID then
+                sharkCount = sharkCount + 1
+            end
+        end
+        if sharkCount == 0 then
+            Fluent:Notify({ Title = "Error", Description = "Tim shark hanya berisi mimic, butuh setidaknya 1 shark!", Duration = 5 })
+            return false
+        end
+
+        return true
+    end
+
+    -- ============================================================
     -- LOGIKA UTAMA AUTOSHARK
     -- ============================================================
     local function startAutoShark()
@@ -113,43 +156,23 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             return
         end
 
-        -- Validasi
-        if #selectedPetsShark == 0 then
-            Fluent:Notify({ Title = "Error", Description = "Pilih tim shark terlebih dahulu!", Duration = 5 })
-            return
-        end
-        if #selectedPetsTarget == 0 then
-            Fluent:Notify({ Title = "Error", Description = "Pilih target terlebih dahulu!", Duration = 5 })
-            return
-        end
-        if #selectedPetsTumbal == 0 then
-            Fluent:Notify({ Title = "Error", Description = "Pilih tumbal terlebih dahulu!", Duration = 5 })
-            return
-        end
-        if not selectedMutation then
-            Fluent:Notify({ Title = "Error", Description = "Pilih target mutasi!", Duration = 5 })
+        if not validateBeforeStart() then
+            -- Matikan toggle
+            if autoToggleRef then autoToggleRef:SetValue(false) end
+            autoSharkEnabled = false
+            _G[ENABLE_KEY] = false
+            _G.ACTIVE_MODULE = nil
             return
         end
 
-        -- Cari mimic di tim shark
+        -- Cari mimic dan shark
         local sharkUUIDs = selectedUUIDsShark
         local mimicUUID = findMimicUUID(sharkUUIDs)
-        if not mimicUUID then
-            Fluent:Notify({ Title = "Error", Description = "Tidak ada pet dengan mutasi 'Mimic' di tim shark!", Duration = 5 })
-            return
-        end
-
-        -- UUID shark selain mimic
         local sharkOnlyUUIDs = {}
         for _, uuid in ipairs(sharkUUIDs) do
             if uuid ~= mimicUUID then
                 table.insert(sharkOnlyUUIDs, uuid)
             end
-        end
-
-        if #sharkOnlyUUIDs == 0 then
-            Fluent:Notify({ Title = "Error", Description = "Tim shark hanya berisi mimic, butuh setidaknya 1 shark!", Duration = 5 })
-            return
         end
 
         sharkCoroutine = coroutine.create(function()
@@ -193,8 +216,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                             task.wait(0.3)
                         end
 
-                        -- Equip target dan tumbal (1 target, 1 tumbal)
-                        -- Ambil tumbal pertama dari daftar tumbal (gunakan round-robin atau selalu yang pertama)
+                        -- Equip target dan tumbal (ambil tumbal pertama dari daftar)
                         local tumbalUUID = selectedUUIDsTumbal[1] -- bisa diganti round-robin
                         equipPet(targetUUID)
                         task.wait(0.3)
