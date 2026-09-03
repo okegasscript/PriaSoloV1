@@ -1,5 +1,5 @@
 -- ============================================================
--- PNP.lua - Modul Tab PNP dengan Cooldown dari DataPetModule
+-- PNP.lua - Modul Tab PNP
 -- ============================================================
 
 local PNP = {}
@@ -100,13 +100,9 @@ function PNP.Setup(Window, DataPetModule, Fluent)
     -- REFRESH DROPDOWN
     -- ============================================================
     local function refreshPetDropdownPNP()
-        if not DataPetModule then
-            Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
-            return
-        end
+        if not DataPetModule then return end
         local pets = DataPetModule.findPets({ isFavorite = true })
         if #pets == 0 then
-            Fluent:Notify({ Title = "Info", Description = "Tidak ada pet favorite ditemukan", Duration = 5 })
             if dropdownControlPNP then dropdownControlPNP:SetValues({}) end
             petOptionsPNP = {}; selectedPetsPNP = {}; selectedUUIDsPNP = {}
             updatePetInfoPNP({})
@@ -250,7 +246,7 @@ function PNP.Setup(Window, DataPetModule, Fluent)
         autoToggleRef:SetValue(autoPNPEnabled)
     end
 
-    print("[PNP.lua] Tab PNP siap dengan cooldown.")
+    print("[PNP.lua] Tab PNP siap.")
 end
 
 return PNP
