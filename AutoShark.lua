@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - FINAL (menggunakan Content)
+-- AutoShark.lua - FINAL (tanpa SetContent)
 -- ============================================================
 
 local AutoShark = {}
@@ -242,7 +242,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
-    -- UPDATE INFO (menggunakan properti Content)
+    -- UPDATE INFO (hanya menggunakan properti Content)
     -- ============================================================
     local function updatePetInfoShark(uuids)
         if not infoParagraphShark then return end
@@ -523,7 +523,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             selectedUUIDsShark = uuids
             _G[SAVE_KEY_SHARK] = uuids
             updatePetInfoShark(uuids)
-            print("[AutoShark] SHARK SELECTED:", #uuids)
         end
     })
     sectionShark:AddButton({ Title = "↻ Refresh Daftar Shark", Callback = function() refreshPetDropdownShark() end })
@@ -547,7 +546,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             selectedUUIDsTarget = uuids
             _G[SAVE_KEY_TARGET] = uuids
             updatePetInfoTarget(uuids)
-            print("[AutoShark] TARGET SELECTED:", #uuids)
         end
     })
     sectionTarget:AddButton({ Title = "↻ Refresh Daftar Target", Callback = function() refreshPetDropdownTarget() end })
@@ -571,7 +569,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             selectedUUIDsTumbal = uuids
             _G[SAVE_KEY_TUMBAL] = uuids
             updatePetInfoTumbal(uuids)
-            print("[AutoShark] TUMBAL SELECTED:", #uuids)
         end
     })
     sectionTumbal:AddButton({ Title = "↻ Refresh Daftar Tumbal", Callback = function() refreshPetDropdownTumbal() end })
