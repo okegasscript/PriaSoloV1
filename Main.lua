@@ -1,7 +1,6 @@
 -- ============================================================
 -- MAIN SCRIPT - Pria Solo HUB (Final)
 -- Memuat semua modul terpisah: DataPetModule, Leveling, PNP, AutoShark
--- Mutual exclusion antara Leveling dan AutoShark
 -- ============================================================
 
 -- Load Library Fluent
@@ -10,11 +9,11 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -- ============================================================
--- INISIALISASI GLOBAL UNTUK MUTUAL EXCLUSION
+-- MUTUAL EXCLUSION GLOBAL
 -- ============================================================
-_G.ACTIVE_MODULE = nil        -- "Leveling" atau "AutoShark"
-_G.LEVELING_TOGGLE = nil      -- referensi toggle leveling
-_G.AUTO_SHARK_TOGGLE = nil    -- referensi toggle auto shark
+_G.ACTIVE_MODULE = nil      -- "Leveling" atau "AutoShark"
+_G.LEVELING_TOGGLE = nil
+_G.AUTO_SHARK_TOGGLE = nil
 
 -- ============================================================
 -- LOAD DATAPETMODULE
@@ -41,12 +40,6 @@ local Window = Fluent:CreateWindow({
     Theme = "Rose",
     MinimizeKey = Enum.KeyCode.LeftControl
 })
-
--- ============================================================
--- LANGSUNG BUKA TAB LEVELING (jika ada)
--- ============================================================
-task.wait(0.1)
-Window:SelectTab("Leveling")
 
 -- ============================================================
 -- LOAD & SETUP LEVELING.LUA
@@ -110,6 +103,14 @@ else
     local fallbackTab = Window:AddTab({ Title = "AutoShark" })
     fallbackTab:AddParagraph({ Title = "Error", Content = "Gagal memuat AutoShark.lua" })
 end
+
+-- ============================================================
+-- PILIH TAB LEVELING SECARA AMAN
+-- ============================================================
+task.wait(0.5)
+pcall(function()
+    Window:SelectTab("Leveling")
+end)
 
 -- ============================================================
 -- SETUP SAVEMANAGER & INTERFACEMANAGER
