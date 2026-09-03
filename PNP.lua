@@ -1,5 +1,5 @@
 -- ============================================================
--- PNP.lua - Modul Tab PNP (independen)
+-- PNP.lua - Modul Tab PNP
 -- ============================================================
 
 local PNP = {}
@@ -190,6 +190,7 @@ function PNP.Setup(Window, DataPetModule, Fluent)
     end
 
     print("[PNP.lua] Tab PNP siap.")
+    return PNPTab
 end
 
 return PNP
