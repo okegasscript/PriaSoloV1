@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - Modul Tab AutoShark (dengan mutual exclusion)
+-- AutoShark.lua - Modul Tab AutoShark
 -- ============================================================
 
 local AutoShark = {}
@@ -29,7 +29,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     local SAVE_KEY_SHARK = "SelectedPetUUIDs_Shark"
     local SAVE_KEY_SHARK_TARGET = "SelectedPetUUIDs_SharkTarget"
     local SAVE_KEY_MUTATION = "SelectedMutation"
-    local SHARK_ENABLE_KEY = "AutoSharkEnabled"
 
     -- Update info shark
     local function updatePetInfoShark(pets)
@@ -293,12 +292,14 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     })
     sectionMutation:AddButton({ Title = "↻ Refresh Daftar Mutasi", Callback = function() refreshMutationDropdown() end })
 
-    -- Pengaturan AutoShark dengan mutual exclusion
+    -- ============================================================
+    -- PENGATURAN AUTOSHARK (DENGAN TOGGLE)
+    -- ============================================================
     local controlSectionShark = AutoSharkTab:AddSection("Pengaturan AutoShark")
     local autoSharkToggle = controlSectionShark:AddToggle("AutoSharkToggle", {
         Title = "Auto Shark",
         Description = "Aktifkan untuk menjalankan Auto Shark",
-        Default = _G[SHARK_ENABLE_KEY] or false,
+        Default = _G["AutoSharkEnabled"] or false,
         Callback = function(value)
             if value then
                 -- Matikan Leveling jika menyala
@@ -306,10 +307,10 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                     _G.LEVELING_TOGGLE:SetValue(false)
                 end
                 _G.ACTIVE_MODULE = "AutoShark"
-                _G[SHARK_ENABLE_KEY] = true
+                _G["AutoSharkEnabled"] = true
                 Fluent:Notify({ Title = "Auto Shark", Description = "Auto Shark diaktifkan!", Duration = 3 })
             else
-                _G[SHARK_ENABLE_KEY] = false
+                _G["AutoSharkEnabled"] = false
                 if _G.ACTIVE_MODULE == "AutoShark" then
                     _G.ACTIVE_MODULE = nil
                 end
@@ -324,8 +325,10 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     refreshPetDropdownShark()
     refreshPetDropdownSharkTarget()
     refreshMutationDropdown()
-    if _G[SHARK_ENABLE_KEY] ~= nil then
-        autoSharkToggle:SetValue(_G[SHARK_ENABLE_KEY])
+
+    -- Restore state toggle
+    if _G["AutoSharkEnabled"] ~= nil then
+        autoSharkToggle:SetValue(_G["AutoSharkEnabled"])
     end
 
     print("[AutoShark.lua] Tab AutoShark siap.")
