@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - Modul Tab AutoShark (FIXED DROPDOWN)
+-- AutoShark.lua - Modul Tab AutoShark (FIXED - tanpa GetValue)
 -- ============================================================
 
 local AutoShark = {}
@@ -529,7 +529,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
-    -- UI COMPONENTS - DROPDOWN DENGAN FIX
+    -- UI COMPONENTS - GUNAKAN CALLBACK BIASA DENGAN PARAMETER
     -- ============================================================
     local sectionShark = AutoSharkTab:AddSection("Pilih Tim Auto Shark (Favorit)")
     dropdownControlShark = sectionShark:AddDropdown("PetDropdownShark", {
@@ -538,12 +538,10 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selectedLabels)
-            -- FIX: Gunakan GetValue() untuk mengambil nilai yang sebenarnya
-            local currentLabels = dropdownControlShark:GetValue()
-            print("[AutoShark] SHARK SELECTED (via GetValue):", currentLabels)
-            if currentLabels and type(currentLabels) == "table" and #currentLabels > 0 then
+            print("[AutoShark] SHARK CALLBACK RECEIVED:", selectedLabels)
+            if selectedLabels and type(selectedLabels) == "table" and #selectedLabels > 0 then
                 local selected = {}; local uuids = {}
-                for _, label in ipairs(currentLabels) do
+                for _, label in ipairs(selectedLabels) do
                     if petOptionsShark[label] then
                         table.insert(selected, petOptionsShark[label])
                         table.insert(uuids, petOptionsShark[label].uuid)
@@ -571,11 +569,10 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selectedLabels)
-            local currentLabels = dropdownControlTarget:GetValue()
-            print("[AutoShark] TARGET SELECTED (via GetValue):", currentLabels)
-            if currentLabels and type(currentLabels) == "table" and #currentLabels > 0 then
+            print("[AutoShark] TARGET CALLBACK RECEIVED:", selectedLabels)
+            if selectedLabels and type(selectedLabels) == "table" and #selectedLabels > 0 then
                 local selected = {}; local uuids = {}
-                for _, label in ipairs(currentLabels) do
+                for _, label in ipairs(selectedLabels) do
                     if petOptionsTarget[label] then
                         table.insert(selected, petOptionsTarget[label])
                         table.insert(uuids, petOptionsTarget[label].uuid)
@@ -603,11 +600,10 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selectedLabels)
-            local currentLabels = dropdownControlTumbal:GetValue()
-            print("[AutoShark] TUMBAL SELECTED (via GetValue):", currentLabels)
-            if currentLabels and type(currentLabels) == "table" and #currentLabels > 0 then
+            print("[AutoShark] TUMBAL CALLBACK RECEIVED:", selectedLabels)
+            if selectedLabels and type(selectedLabels) == "table" and #selectedLabels > 0 then
                 local selected = {}; local uuids = {}
-                for _, label in ipairs(currentLabels) do
+                for _, label in ipairs(selectedLabels) do
                     if petOptionsTumbal[label] then
                         table.insert(selected, petOptionsTumbal[label])
                         table.insert(uuids, petOptionsTumbal[label].uuid)
@@ -635,7 +631,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = false,
         Default = "",
         Callback = function(selected)
-            print("[AutoShark] MUTASI SELECTED:", selected)
+            print("[AutoShark] MUTASI CALLBACK RECEIVED:", selected)
             if selected and mutationOptions[selected] then
                 selectedMutation = selected
                 _G[SAVE_KEY_MUTATION] = selected
