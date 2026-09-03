@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - Modul Tab AutoShark (FINAL dengan DEBUG)
+-- AutoShark.lua - Modul Tab AutoShark (FIXED DROPDOWN)
 -- ============================================================
 
 local AutoShark = {}
@@ -529,7 +529,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
-    -- UI COMPONENTS
+    -- UI COMPONENTS - DROPDOWN DENGAN FIX
     -- ============================================================
     local sectionShark = AutoSharkTab:AddSection("Pilih Tim Auto Shark (Favorit)")
     dropdownControlShark = sectionShark:AddDropdown("PetDropdownShark", {
@@ -538,10 +538,12 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selectedLabels)
-            print("[AutoShark] SHARK SELECTED:", selectedLabels)
-            if selectedLabels and #selectedLabels > 0 then
+            -- FIX: Gunakan GetValue() untuk mengambil nilai yang sebenarnya
+            local currentLabels = dropdownControlShark:GetValue()
+            print("[AutoShark] SHARK SELECTED (via GetValue):", currentLabels)
+            if currentLabels and type(currentLabels) == "table" and #currentLabels > 0 then
                 local selected = {}; local uuids = {}
-                for _, label in ipairs(selectedLabels) do
+                for _, label in ipairs(currentLabels) do
                     if petOptionsShark[label] then
                         table.insert(selected, petOptionsShark[label])
                         table.insert(uuids, petOptionsShark[label].uuid)
@@ -555,6 +557,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedPetsShark = {}; selectedUUIDsShark = {}
                 _G[SAVE_KEY_SHARK] = {}
                 updatePetInfoShark({})
+                print("[AutoShark] SHARK COUNT: 0 (cleared)")
             end
         end
     })
@@ -568,10 +571,11 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selectedLabels)
-            print("[AutoShark] TARGET SELECTED:", selectedLabels)
-            if selectedLabels and #selectedLabels > 0 then
+            local currentLabels = dropdownControlTarget:GetValue()
+            print("[AutoShark] TARGET SELECTED (via GetValue):", currentLabels)
+            if currentLabels and type(currentLabels) == "table" and #currentLabels > 0 then
                 local selected = {}; local uuids = {}
-                for _, label in ipairs(selectedLabels) do
+                for _, label in ipairs(currentLabels) do
                     if petOptionsTarget[label] then
                         table.insert(selected, petOptionsTarget[label])
                         table.insert(uuids, petOptionsTarget[label].uuid)
@@ -585,6 +589,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedPetsTarget = {}; selectedUUIDsTarget = {}
                 _G[SAVE_KEY_TARGET] = {}
                 updatePetInfoTarget({})
+                print("[AutoShark] TARGET COUNT: 0 (cleared)")
             end
         end
     })
@@ -598,10 +603,11 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selectedLabels)
-            print("[AutoShark] TUMBAL SELECTED:", selectedLabels)
-            if selectedLabels and #selectedLabels > 0 then
+            local currentLabels = dropdownControlTumbal:GetValue()
+            print("[AutoShark] TUMBAL SELECTED (via GetValue):", currentLabels)
+            if currentLabels and type(currentLabels) == "table" and #currentLabels > 0 then
                 local selected = {}; local uuids = {}
-                for _, label in ipairs(selectedLabels) do
+                for _, label in ipairs(currentLabels) do
                     if petOptionsTumbal[label] then
                         table.insert(selected, petOptionsTumbal[label])
                         table.insert(uuids, petOptionsTumbal[label].uuid)
@@ -615,6 +621,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 selectedPetsTumbal = {}; selectedUUIDsTumbal = {}
                 _G[SAVE_KEY_TUMBAL] = {}
                 updatePetInfoTumbal({})
+                print("[AutoShark] TUMBAL COUNT: 0 (cleared)")
             end
         end
     })
