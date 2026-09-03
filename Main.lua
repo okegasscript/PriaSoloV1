@@ -1,12 +1,20 @@
 -- ============================================================
 -- MAIN SCRIPT - Pria Solo HUB (Final)
 -- Memuat semua modul terpisah: DataPetModule, Leveling, PNP, AutoShark
+-- Mutual exclusion antara Leveling dan AutoShark
 -- ============================================================
 
 -- Load Library Fluent
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+-- ============================================================
+-- INISIALISASI GLOBAL UNTUK MUTUAL EXCLUSION
+-- ============================================================
+_G.ACTIVE_MODULE = nil        -- "Leveling" atau "AutoShark"
+_G.LEVELING_TOGGLE = nil      -- referensi toggle leveling
+_G.AUTO_SHARK_TOGGLE = nil    -- referensi toggle auto shark
 
 -- ============================================================
 -- LOAD DATAPETMODULE
