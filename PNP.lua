@@ -1,5 +1,5 @@
 -- ============================================================
--- PNP.lua - Modul Tab PNP
+-- PNP.lua - Modul Tab PNP dengan Cooldown dari DataPetModule
 -- ============================================================
 
 local PNP = {}
@@ -7,6 +7,7 @@ local PNP = {}
 function PNP.Setup(Window, DataPetModule, Fluent)
     local PNPTab = Window:AddTab({ Title = "PNP" })
 
+    -- Variabel
     local petOptionsPNP = {}
     local selectedPetsPNP = {}
     local selectedUUIDsPNP = {}
@@ -16,13 +17,66 @@ function PNP.Setup(Window, DataPetModule, Fluent)
     local pickupDelay = 0.5
     local placeDelay = 0.5
     local autoPNPEnabled = false
+    local pnpCoroutine = nil
 
     local SAVE_KEY_PNP = "SelectedPetUUIDs_PNP"
     local PICKUP_DELAY_KEY = "PickupDelay"
     local PLACE_DELAY_KEY = "PlaceDelay"
     local PNP_ENABLE_KEY = "AutoPNPEnabled"
 
-    -- Update info
+    local GARDEN_CFRAME = CFrame.new(-16.000007629395, 4, -116.50244903564, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+
+    local autoToggleRef = nil
+
+    -- ============================================================
+    -- FUNGSI EQUIP / UNEQUIP
+    -- ============================================================
+    local function equipPet(uuid)
+        local Event = game:GetService("ReplicatedStorage").GameEvents.PetsService
+        Event:FireServer("EquipPet", uuid, GARDEN_CFRAME)
+    end
+
+    local function unequipPet(uuid)
+        local Event = game:GetService("ReplicatedStorage").GameEvents.PetsService
+        Event:FireServer("UnequipPet", uuid)
+    end
+
+    -- ============================================================
+    -- CEK COOLDOWN
+    -- ============================================================
+    local function isPetReady(uuid)
+        local cooldown = DataPetModule.getCooldown(uuid)
+        return cooldown == nil or cooldown == 0
+    end
+
+    -- ============================================================
+    -- LOGIKA UTAMA
+    -- ============================================================
+    local function startPNP()
+        if pnpCoroutine and coroutine.status(pnpCoroutine) ~= "dead" then
+            return
+        end
+        pnpCoroutine = coroutine.create(function()
+            while autoPNPEnabled do
+                for _, pet in ipairs(selectedPetsPNP) do
+                    if not autoPNPEnabled then break end
+                    local uuid = pet.uuid
+                    if isPetReady(uuid) then
+                        unequipPet(uuid)
+                        task.wait(pickupDelay)
+                        equipPet(uuid)
+                        task.wait(placeDelay)
+                    end
+                end
+                task.wait(0.5)
+            end
+        end)
+        coroutine.resume(pnpCoroutine)
+    end
+
+    -- ============================================================
+    -- UPDATE INFO
+    -- ============================================================
     local function updatePetInfoPNP(pets)
         if not infoParagraphPNP then return end
         local contentText
@@ -31,7 +85,7 @@ function PNP.Setup(Window, DataPetModule, Fluent)
             for i, pet in ipairs(pets) do
                 table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
             end
-            contentText = "Pet Terpilih:\n" .. table.concat(lines, "\n")
+            contentText = "Pet PNP:\n" .. table.concat(lines, "\n")
         else
             contentText = "Belum ada pet dipilih"
         end
@@ -42,7 +96,9 @@ function PNP.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    -- Refresh dropdown
+    -- ============================================================
+    -- REFRESH DROPDOWN
+    -- ============================================================
     local function refreshPetDropdownPNP()
         if not DataPetModule then
             Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
@@ -95,7 +151,9 @@ function PNP.Setup(Window, DataPetModule, Fluent)
         end
     end
 
+    -- ============================================================
     -- UI
+    -- ============================================================
     local sectionPNP = PNPTab:AddSection("Pilih Pet Favorite (Multi)")
     dropdownControlPNP = sectionPNP:AddDropdown("PetDropdownPNP", {
         Title = "Daftar Pet Favorite",
@@ -122,7 +180,7 @@ function PNP.Setup(Window, DataPetModule, Fluent)
         end
     })
     sectionPNP:AddButton({ Title = "↻ Refresh Daftar", Callback = function() refreshPetDropdownPNP() end })
-    infoParagraphPNP = sectionPNP:AddParagraph({ Title = "Pet Terpilih", Content = "Belum ada pet dipilih" })
+    infoParagraphPNP = sectionPNP:AddParagraph({ Title = "Pet PNP", Content = "Belum ada pet dipilih" })
 
     -- Pengaturan
     local controlSectionPNP = PNPTab:AddSection("Pengaturan PNP")
@@ -142,6 +200,7 @@ function PNP.Setup(Window, DataPetModule, Fluent)
             end
         end
     })
+
     local placeInput = controlSectionPNP:AddInput("PlaceDelayInput", {
         Title = "Place Delay (detik)",
         Placeholder = "Masukkan delay place",
@@ -158,7 +217,8 @@ function PNP.Setup(Window, DataPetModule, Fluent)
             end
         end
     })
-    local autoPNPToggle = controlSectionPNP:AddToggle("AutoPNPToggle", {
+
+    autoToggleRef = controlSectionPNP:AddToggle("AutoPNPToggle", {
         Title = "Auto PNP",
         Description = "Aktifkan untuk menjalankan PNP otomatis",
         Default = _G[PNP_ENABLE_KEY] or false,
@@ -167,6 +227,7 @@ function PNP.Setup(Window, DataPetModule, Fluent)
             _G[PNP_ENABLE_KEY] = value
             if value then
                 Fluent:Notify({ Title = "Auto PNP", Description = "Auto PNP diaktifkan!", Duration = 3 })
+                startPNP()
             else
                 Fluent:Notify({ Title = "Auto PNP", Description = "Auto PNP dinonaktifkan", Duration = 3 })
             end
@@ -186,11 +247,10 @@ function PNP.Setup(Window, DataPetModule, Fluent)
     end
     if _G[PNP_ENABLE_KEY] ~= nil then
         autoPNPEnabled = _G[PNP_ENABLE_KEY]
-        autoPNPToggle:SetValue(autoPNPEnabled)
+        autoToggleRef:SetValue(autoPNPEnabled)
     end
 
-    print("[PNP.lua] Tab PNP siap.")
-    return PNPTab
+    print("[PNP.lua] Tab PNP siap dengan cooldown.")
 end
 
 return PNP
