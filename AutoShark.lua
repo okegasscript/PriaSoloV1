@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - FINAL (working)
+-- AutoShark.lua - FINAL (menggunakan Content)
 -- ============================================================
 
 local AutoShark = {}
@@ -242,7 +242,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
-    -- UPDATE INFO
+    -- UPDATE INFO (menggunakan properti Content)
     -- ============================================================
     local function updatePetInfoShark(uuids)
         if not infoParagraphShark then return end
@@ -261,7 +261,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         else
             contentText = "Belum ada pet dipilih (Tim Shark)"
         end
-        infoParagraphShark:SetContent(contentText)
+        infoParagraphShark.Content = contentText
     end
 
     local function updatePetInfoTarget(uuids)
@@ -281,7 +281,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         else
             contentText = "Belum ada pet dipilih (Target)"
         end
-        infoParagraphTarget:SetContent(contentText)
+        infoParagraphTarget.Content = contentText
     end
 
     local function updatePetInfoTumbal(uuids)
@@ -301,7 +301,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         else
             contentText = "Belum ada pet dipilih (Tumbal)"
         end
-        infoParagraphTumbal:SetContent(contentText)
+        infoParagraphTumbal.Content = contentText
     end
 
     -- ============================================================
