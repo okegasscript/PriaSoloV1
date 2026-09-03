@@ -1,5 +1,5 @@
 -- ============================================================
--- Leveling.lua - Modul Tab Leveling
+-- Leveling.lua - Modul Tab Leveling (dengan mutual exclusion)
 -- ============================================================
 
 local Leveling = {}
@@ -232,7 +232,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     sectionTarget:AddButton({ Title = "↻ Refresh Daftar Target", Callback = function() refreshPetDropdownTarget() end })
     infoParagraphTarget = sectionTarget:AddParagraph({ Title = "Pet Target (Non-Favorit)", Content = "Belum ada pet dipilih (Target Non-Favorit)" })
 
-    -- Pengaturan
+    -- Pengaturan dengan mutual exclusion
     local controlSectionLvl = LevelingTab:AddSection("Pengaturan Leveling")
     local targetInput = controlSectionLvl:AddInput("TargetLevelInput", {
         Title = "Target Level",
@@ -250,20 +250,31 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
             end
         end
     })
+
     local autoToggle = controlSectionLvl:AddToggle("AutoLevelToggle", {
         Title = "Auto Leveling",
         Description = "Aktifkan untuk mulai leveling otomatis",
         Default = _G[ENABLE_KEY] or false,
         Callback = function(value)
-            autoLevelEnabled = value
-            _G[ENABLE_KEY] = value
             if value then
+                -- Matikan AutoShark jika menyala
+                if _G.ACTIVE_MODULE == "AutoShark" and _G.AUTO_SHARK_TOGGLE then
+                    _G.AUTO_SHARK_TOGGLE:SetValue(false)
+                end
+                _G.ACTIVE_MODULE = "Leveling"
+                _G[ENABLE_KEY] = true
                 Fluent:Notify({ Title = "Auto Leveling", Description = "Auto leveling diaktifkan!", Duration = 3 })
             else
+                _G[ENABLE_KEY] = false
+                if _G.ACTIVE_MODULE == "Leveling" then
+                    _G.ACTIVE_MODULE = nil
+                end
                 Fluent:Notify({ Title = "Auto Leveling", Description = "Auto leveling dinonaktifkan", Duration = 3 })
             end
         end
     })
+    -- Simpan referensi toggle
+    _G.LEVELING_TOGGLE = autoToggle
 
     -- Load awal
     task.wait(0.5)
