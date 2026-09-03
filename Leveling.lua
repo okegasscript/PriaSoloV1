@@ -1,5 +1,5 @@
 -- ============================================================
--- Leveling.lua - Modul Tab Leveling dengan Logika Lengkap
+-- Leveling.lua - Modul Tab Leveling
 -- ============================================================
 
 local Leveling = {}
@@ -7,17 +7,16 @@ local Leveling = {}
 function Leveling.Setup(Window, DataPetModule, Fluent)
     local LevelingTab = Window:AddTab({ Title = "Leveling" })
 
-    -- Variabel lokal
+    -- Variabel
     local petOptionsLvl = {}
     local selectedPetsLvl = {}
     local selectedUUIDsLvl = {}
+    local dropdownControlLvl = nil
+    local infoParagraphLvl = nil
 
     local petOptionsTarget = {}
     local selectedPetsTarget = {}
     local selectedUUIDsTarget = {}
-
-    local dropdownControlLvl = nil
-    local infoParagraphLvl = nil
     local dropdownControlTarget = nil
     local infoParagraphTarget = nil
 
@@ -35,8 +34,21 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     local autoToggleRef = nil
 
     -- ============================================================
-    -- FUNGSI BANTU: GET EQUIPPED PETS
+    -- FUNGSI EQUIP / UNEQUIP
     -- ============================================================
+    local function equipPet(uuid)
+        local Event = game:GetService("ReplicatedStorage").GameEvents.PetsService
+        if not _G.GardenCFrame then
+            _G.GardenCFrame = CFrame.new(-16.000007629395, 4, -116.50244903564, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+        end
+        Event:FireServer("EquipPet", uuid, _G.GardenCFrame)
+    end
+
+    local function unequipPet(uuid)
+        local Event = game:GetService("ReplicatedStorage").GameEvents.PetsService
+        Event:FireServer("UnequipPet", uuid)
+    end
+
     local function getEquippedUUIDs()
         local ReplicatedStorage = game:GetService("ReplicatedStorage")
         local DataService = nil
@@ -58,22 +70,6 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         return equipped or {}
     end
 
-    -- ============================================================
-    -- FUNGSI EQUIP / UNEQUIP
-    -- ============================================================
-    local function equipPet(uuid)
-        local Event = game:GetService("ReplicatedStorage").GameEvents.PetsService
-        if not _G.GardenCFrame then
-            _G.GardenCFrame = CFrame.new(-16.000007629395, 4, -116.50244903564, 1, 0, 0, 0, 1, 0, 0, 0, 1)
-        end
-        Event:FireServer("EquipPet", uuid, _G.GardenCFrame)
-    end
-
-    local function unequipPet(uuid)
-        local Event = game:GetService("ReplicatedStorage").GameEvents.PetsService
-        Event:FireServer("UnequipPet", uuid)
-    end
-
     local function unequipAllEquipped()
         local equipped = getEquippedUUIDs()
         for _, uuid in ipairs(equipped) do
@@ -91,7 +87,6 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         end
         levelingCoroutine = coroutine.create(function()
             while autoLevelEnabled do
-                -- 1. Unequip semua pet di garden
                 local equipped = getEquippedUUIDs()
                 if #equipped > 0 then
                     for _, uuid in ipairs(equipped) do
@@ -100,13 +95,11 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
                     end
                 end
 
-                -- 2. Equip pet tim leveling (favorite)
                 for _, uuid in ipairs(selectedUUIDsLvl) do
                     equipPet(uuid)
                     task.wait(0.3)
                 end
 
-                -- 3. Proses target
                 local targetQueue = {}
                 for _, pet in ipairs(selectedPetsTarget) do
                     table.insert(targetQueue, pet)
@@ -136,10 +129,8 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
                     task.wait(1)
                 end
 
-                -- 4. Semua target selesai, unequip semua
                 unequipAllEquipped()
 
-                -- 5. Matikan toggle otomatis
                 if autoLevelEnabled then
                     autoLevelEnabled = false
                     _G[ENABLE_KEY] = false
@@ -198,13 +189,9 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     -- REFRESH DROPDOWN
     -- ============================================================
     local function refreshPetDropdownLvl()
-        if not DataPetModule then
-            Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
-            return
-        end
+        if not DataPetModule then return end
         local pets = DataPetModule.findPets({ isFavorite = true })
         if #pets == 0 then
-            Fluent:Notify({ Title = "Info", Description = "Tidak ada pet favorite ditemukan", Duration = 5 })
             if dropdownControlLvl then dropdownControlLvl:SetValues({}) end
             petOptionsLvl = {}; selectedPetsLvl = {}; selectedUUIDsLvl = {}
             updatePetInfoLvl({})
@@ -250,13 +237,9 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
     end
 
     local function refreshPetDropdownTarget()
-        if not DataPetModule then
-            Fluent:Notify({ Title = "Error", Description = "DataPetModule tidak tersedia", Duration = 5 })
-            return
-        end
+        if not DataPetModule then return end
         local pets = DataPetModule.findPets({ isFavorite = false })
         if #pets == 0 then
-            Fluent:Notify({ Title = "Info", Description = "Tidak ada pet non-favorit ditemukan", Duration = 5 })
             if dropdownControlTarget then dropdownControlTarget:SetValues({}) end
             petOptionsTarget = {}; selectedPetsTarget = {}; selectedUUIDsTarget = {}
             updatePetInfoTarget({})
