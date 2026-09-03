@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - Modul Tab AutoShark (UUID sebagai nilai)
+-- AutoShark.lua - Modul Tab AutoShark (FIXED - gunakan dropdown.Value)
 -- ============================================================
 
 local AutoShark = {}
@@ -7,18 +7,21 @@ local AutoShark = {}
 function AutoShark.Setup(Window, DataPetModule, Fluent)
     local AutoSharkTab = Window:AddTab({ Title = "AutoShark" })
 
-    -- Variabel: petOptions akan di-key dengan UUID, dan nilai adalah pet
-    local petOptionsShark = {}      -- [uuid] = pet
+    -- Variabel
+    local petOptionsShark = {}
+    local selectedPetsShark = {}
     local selectedUUIDsShark = {}
     local dropdownControlShark = nil
     local infoParagraphShark = nil
 
     local petOptionsTarget = {}
+    local selectedPetsTarget = {}
     local selectedUUIDsTarget = {}
     local dropdownControlTarget = nil
     local infoParagraphTarget = nil
 
     local petOptionsTumbal = {}
+    local selectedPetsTumbal = {}
     local selectedUUIDsTumbal = {}
     local dropdownControlTumbal = nil
     local infoParagraphTumbal = nil
@@ -95,24 +98,37 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
+    -- FUNGSI MATCHING FLEKSIBEL
+    -- ============================================================
+    local function findPetByMatch(options, value)
+        if not options or not value then return nil end
+        for label, pet in pairs(options) do
+            if label == value or pet.uuid == value or string.sub(pet.uuid, 1, 7) == value or string.sub(pet.uuid, 1, 16) == value then
+                return pet
+            end
+        end
+        return nil
+    end
+
+    -- ============================================================
     -- VALIDASI
     -- ============================================================
     local function validateBeforeStart()
         print("=== VALIDASI AUTOSHARK ===")
-        print("Tim Shark (selectedUUIDsShark):", #selectedUUIDsShark)
-        print("Target (selectedUUIDsTarget):", #selectedUUIDsTarget)
-        print("Tumbal (selectedUUIDsTumbal):", #selectedUUIDsTumbal)
+        print("Tim Shark (selectedPetsShark):", #selectedPetsShark)
+        print("Target (selectedPetsTarget):", #selectedPetsTarget)
+        print("Tumbal (selectedPetsTumbal):", #selectedPetsTumbal)
         print("Mutasi Terpilih:", selectedMutation or "None")
 
-        if #selectedUUIDsShark == 0 then
+        if #selectedPetsShark == 0 then
             Fluent:Notify({ Title = "Error", Description = "Pilih tim shark terlebih dahulu! (min 2 pet favorit, 1 di antaranya Mimic)", Duration = 5 })
             return false
         end
-        if #selectedUUIDsTarget == 0 then
+        if #selectedPetsTarget == 0 then
             Fluent:Notify({ Title = "Error", Description = "Pilih target terlebih dahulu!", Duration = 5 })
             return false
         end
-        if #selectedUUIDsTumbal == 0 then
+        if #selectedPetsTumbal == 0 then
             Fluent:Notify({ Title = "Error", Description = "Pilih tumbal terlebih dahulu!", Duration = 5 })
             return false
         end
@@ -177,12 +193,13 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
                 end
 
                 local targetQueue = {}
-                for _, uuid in ipairs(selectedUUIDsTarget) do
-                    table.insert(targetQueue, uuid)
+                for _, pet in ipairs(selectedPetsTarget) do
+                    table.insert(targetQueue, pet)
                 end
 
                 while #targetQueue > 0 and autoSharkEnabled do
-                    local targetUUID = table.remove(targetQueue, 1)
+                    local currentTarget = table.remove(targetQueue, 1)
+                    local targetUUID = currentTarget.uuid
                     local targetReachedMutation = false
 
                     while not targetReachedMutation and autoSharkEnabled do
@@ -249,18 +266,13 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     -- ============================================================
     -- UPDATE INFO
     -- ============================================================
-    local function updatePetInfoShark(uuids)
+    local function updatePetInfoShark(pets)
         if not infoParagraphShark then return end
         local contentText
-        if uuids and #uuids > 0 then
+        if pets and #pets > 0 then
             local lines = {}
-            for i, uuid in ipairs(uuids) do
-                local pet = DataPetModule.findPet({ uuid = uuid })
-                if pet then
-                    table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
-                else
-                    table.insert(lines, string.format("%d. UUID: %s (tidak ditemukan)", i, uuid))
-                end
+            for i, pet in ipairs(pets) do
+                table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
             end
             contentText = "Tim Shark:\n" .. table.concat(lines, "\n")
         else
@@ -273,18 +285,13 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    local function updatePetInfoTarget(uuids)
+    local function updatePetInfoTarget(pets)
         if not infoParagraphTarget then return end
         local contentText
-        if uuids and #uuids > 0 then
+        if pets and #pets > 0 then
             local lines = {}
-            for i, uuid in ipairs(uuids) do
-                local pet = DataPetModule.findPet({ uuid = uuid })
-                if pet then
-                    table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
-                else
-                    table.insert(lines, string.format("%d. UUID: %s (tidak ditemukan)", i, uuid))
-                end
+            for i, pet in ipairs(pets) do
+                table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
             end
             contentText = "Target:\n" .. table.concat(lines, "\n")
         else
@@ -297,18 +304,13 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
     end
 
-    local function updatePetInfoTumbal(uuids)
+    local function updatePetInfoTumbal(pets)
         if not infoParagraphTumbal then return end
         local contentText
-        if uuids and #uuids > 0 then
+        if pets and #pets > 0 then
             local lines = {}
-            for i, uuid in ipairs(uuids) do
-                local pet = DataPetModule.findPet({ uuid = uuid })
-                if pet then
-                    table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
-                else
-                    table.insert(lines, string.format("%d. UUID: %s (tidak ditemukan)", i, uuid))
-                end
+            for i, pet in ipairs(pets) do
+                table.insert(lines, string.format("%d. %s %s %.2fkg Lv%d", i, pet.mutation, pet.name, pet.weight, pet.level))
             end
             contentText = "Tumbal:\n" .. table.concat(lines, "\n")
         else
@@ -322,96 +324,134 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
-    -- REFRESH DROPDOWN (menggunakan UUID sebagai nilai)
+    -- FUNGSI UNTUK MENANGANI SELECTION DARI DROPDOWN
+    -- ============================================================
+    local function handleDropdownSelection(dropdown, petOptions, callback, key)
+        -- Dapatkan nilai yang dipilih dari dropdown
+        local selectedLabels = dropdown.Value
+        print("[AutoShark] " .. key .. " VALUE:", selectedLabels)
+        if selectedLabels and type(selectedLabels) == "table" then
+            local selected = {}; local uuids = {}
+            for _, sel in ipairs(selectedLabels) do
+                print("[AutoShark] Mencocokkan sel:", sel)
+                local pet = findPetByMatch(petOptions, sel)
+                if pet then
+                    table.insert(selected, pet)
+                    table.insert(uuids, pet.uuid)
+                    print("[AutoShark] Cocok ditemukan:", pet.name)
+                else
+                    print("[AutoShark] Tidak ada cocok untuk:", sel)
+                end
+            end
+            callback(selected, uuids)
+        else
+            callback({}, {})
+        end
+    end
+
+    -- ============================================================
+    -- REFRESH DROPDOWN
     -- ============================================================
     local function refreshPetDropdownShark()
-        print("[AutoShark] refreshPetDropdownShark")
         if not DataPetModule then return end
         local pets = DataPetModule.findPets({ isFavorite = true })
         if #pets == 0 then
             if dropdownControlShark then dropdownControlShark:SetValues({}) end
-            petOptionsShark = {}; selectedUUIDsShark = {}
+            petOptionsShark = {}; selectedPetsShark = {}; selectedUUIDsShark = {}
             updatePetInfoShark({})
             return
         end
-        -- Bangun tabel: key = UUID, value = pet, dan values untuk dropdown adalah UUID
         local values = {}
         petOptionsShark = {}
         for _, pet in ipairs(pets) do
-            table.insert(values, pet.uuid)  -- nilai dropdown adalah UUID penuh
-            petOptionsShark[pet.uuid] = pet
+            local label = string.format("%s %s %.2fkg Lv%d [%s]", pet.mutation, pet.name, pet.weight, pet.level, string.sub(pet.uuid, 1, 7))
+            table.insert(values, label)
+            petOptionsShark[label] = pet
         end
         if dropdownControlShark then
             dropdownControlShark:SetValues(values)
             -- Restore dari _G
             local savedUUIDs = _G[SAVE_KEY_SHARK]
-            if savedUUIDs and type(savedUUIDs) == "table" and #savedUUIDs > 0 then
-                -- Pastikan semua UUID valid
-                local validUUIDs = {}
+            local restoredLabels = {}
+            if savedUUIDs and type(savedUUIDs) == "table" then
                 for _, uuid in ipairs(savedUUIDs) do
-                    if petOptionsShark[uuid] then
-                        table.insert(validUUIDs, uuid)
+                    for label, pet in pairs(petOptionsShark) do
+                        if pet.uuid == uuid then
+                            table.insert(restoredLabels, label)
+                            break
+                        end
                     end
                 end
-                dropdownControlShark:SetValue(validUUIDs)
-                selectedUUIDsShark = validUUIDs
-                _G[SAVE_KEY_SHARK] = validUUIDs
-                updatePetInfoShark(validUUIDs)
+            end
+            if #restoredLabels > 0 then
+                dropdownControlShark:SetValue(restoredLabels)
+                -- Panggil callback manual dengan mengambil Value
+                handleDropdownSelection(dropdownControlShark, petOptionsShark, function(selected, uuids)
+                    selectedPetsShark = selected
+                    selectedUUIDsShark = uuids
+                    updatePetInfoShark(selected)
+                    print("[AutoShark] SHARK COUNT (restore):", #selected)
+                end, "SHARK")
             else
                 dropdownControlShark:SetValue({})
-                selectedUUIDsShark = {}
-                _G[SAVE_KEY_SHARK] = {}
+                selectedPetsShark = {}; selectedUUIDsShark = {}
                 updatePetInfoShark({})
             end
         end
     end
 
     local function refreshPetDropdownTarget()
-        print("[AutoShark] refreshPetDropdownTarget")
         if not DataPetModule then return end
         local pets = DataPetModule.findPets({ isFavorite = false })
         if #pets == 0 then
             if dropdownControlTarget then dropdownControlTarget:SetValues({}) end
-            petOptionsTarget = {}; selectedUUIDsTarget = {}
+            petOptionsTarget = {}; selectedPetsTarget = {}; selectedUUIDsTarget = {}
             updatePetInfoTarget({})
             return
         end
         local values = {}
         petOptionsTarget = {}
         for _, pet in ipairs(pets) do
-            table.insert(values, pet.uuid)
-            petOptionsTarget[pet.uuid] = pet
+            local label = string.format("%s %s %.2fkg Lv%d [%s]", pet.mutation, pet.name, pet.weight, pet.level, string.sub(pet.uuid, 1, 7))
+            table.insert(values, label)
+            petOptionsTarget[label] = pet
         end
         if dropdownControlTarget then
             dropdownControlTarget:SetValues(values)
             local savedUUIDs = _G[SAVE_KEY_TARGET]
-            if savedUUIDs and type(savedUUIDs) == "table" and #savedUUIDs > 0 then
-                local validUUIDs = {}
+            local restoredLabels = {}
+            if savedUUIDs and type(savedUUIDs) == "table" then
                 for _, uuid in ipairs(savedUUIDs) do
-                    if petOptionsTarget[uuid] then
-                        table.insert(validUUIDs, uuid)
+                    for label, pet in pairs(petOptionsTarget) do
+                        if pet.uuid == uuid then
+                            table.insert(restoredLabels, label)
+                            break
+                        end
                     end
                 end
-                dropdownControlTarget:SetValue(validUUIDs)
-                selectedUUIDsTarget = validUUIDs
-                _G[SAVE_KEY_TARGET] = validUUIDs
-                updatePetInfoTarget(validUUIDs)
+            end
+            if #restoredLabels > 0 then
+                dropdownControlTarget:SetValue(restoredLabels)
+                handleDropdownSelection(dropdownControlTarget, petOptionsTarget, function(selected, uuids)
+                    selectedPetsTarget = selected
+                    selectedUUIDsTarget = uuids
+                    updatePetInfoTarget(selected)
+                    print("[AutoShark] TARGET COUNT (restore):", #selected)
+                end, "TARGET")
             else
                 dropdownControlTarget:SetValue({})
-                selectedUUIDsTarget = {}
-                _G[SAVE_KEY_TARGET] = {}
+                selectedPetsTarget = {}; selectedUUIDsTarget = {}
                 updatePetInfoTarget({})
             end
         end
     end
 
     local function refreshPetDropdownTumbal()
-        print("[AutoShark] refreshPetDropdownTumbal")
         if not DataPetModule then return end
         local pets = DataPetModule.findPets({ isFavorite = false })
         if #pets == 0 then
             if dropdownControlTumbal then dropdownControlTumbal:SetValues({}) end
-            petOptionsTumbal = {}; selectedUUIDsTumbal = {}
+            petOptionsTumbal = {}; selectedPetsTumbal = {}; selectedUUIDsTumbal = {}
             updatePetInfoTumbal({})
             return
         end
@@ -427,41 +467,48 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         end
         if #filtered == 0 then
             if dropdownControlTumbal then dropdownControlTumbal:SetValues({}) end
-            petOptionsTumbal = {}; selectedUUIDsTumbal = {}
+            petOptionsTumbal = {}; selectedPetsTumbal = {}; selectedUUIDsTumbal = {}
             updatePetInfoTumbal({})
             return
         end
         local values = {}
         petOptionsTumbal = {}
         for _, pet in ipairs(filtered) do
-            table.insert(values, pet.uuid)
-            petOptionsTumbal[pet.uuid] = pet
+            local label = string.format("%s %s %.2fkg Lv%d [%s]", pet.mutation, pet.name, pet.weight, pet.level, string.sub(pet.uuid, 1, 7))
+            table.insert(values, label)
+            petOptionsTumbal[label] = pet
         end
         if dropdownControlTumbal then
             dropdownControlTumbal:SetValues(values)
             local savedUUIDs = _G[SAVE_KEY_TUMBAL]
-            if savedUUIDs and type(savedUUIDs) == "table" and #savedUUIDs > 0 then
-                local validUUIDs = {}
+            local restoredLabels = {}
+            if savedUUIDs and type(savedUUIDs) == "table" then
                 for _, uuid in ipairs(savedUUIDs) do
-                    if petOptionsTumbal[uuid] then
-                        table.insert(validUUIDs, uuid)
+                    for label, pet in pairs(petOptionsTumbal) do
+                        if pet.uuid == uuid then
+                            table.insert(restoredLabels, label)
+                            break
+                        end
                     end
                 end
-                dropdownControlTumbal:SetValue(validUUIDs)
-                selectedUUIDsTumbal = validUUIDs
-                _G[SAVE_KEY_TUMBAL] = validUUIDs
-                updatePetInfoTumbal(validUUIDs)
+            end
+            if #restoredLabels > 0 then
+                dropdownControlTumbal:SetValue(restoredLabels)
+                handleDropdownSelection(dropdownControlTumbal, petOptionsTumbal, function(selected, uuids)
+                    selectedPetsTumbal = selected
+                    selectedUUIDsTumbal = uuids
+                    updatePetInfoTumbal(selected)
+                    print("[AutoShark] TUMBAL COUNT (restore):", #selected)
+                end, "TUMBAL")
             else
                 dropdownControlTumbal:SetValue({})
-                selectedUUIDsTumbal = {}
-                _G[SAVE_KEY_TUMBAL] = {}
+                selectedPetsTumbal = {}; selectedUUIDsTumbal = {}
                 updatePetInfoTumbal({})
             end
         end
     end
 
     local function refreshMutationDropdown()
-        print("[AutoShark] refreshMutationDropdown")
         if not DataPetModule then return end
         local allPets = DataPetModule.getAllPets()
         local mutationSet = {}
@@ -505,25 +552,15 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Values = {},
         Multi = true,
         Default = {},
-        Callback = function(selectedUUIDs)
-            print("[AutoShark] SHARK CALLBACK dengan UUIDs:", selectedUUIDs)
-            if selectedUUIDs and type(selectedUUIDs) == "table" then
-                local validUUIDs = {}
-                for _, uuid in ipairs(selectedUUIDs) do
-                    if petOptionsShark[uuid] then
-                        table.insert(validUUIDs, uuid)
-                    end
-                end
-                selectedUUIDsShark = validUUIDs
-                _G[SAVE_KEY_SHARK] = validUUIDs
-                updatePetInfoShark(validUUIDs)
-                print("[AutoShark] SHARK COUNT:", #selectedUUIDsShark)
-            else
-                selectedUUIDsShark = {}
-                _G[SAVE_KEY_SHARK] = {}
-                updatePetInfoShark({})
-                print("[AutoShark] SHARK COUNT: 0 (cleared)")
-            end
+        Callback = function()
+            -- Gunakan dropdown.Value untuk mendapatkan pilihan
+            handleDropdownSelection(dropdownControlShark, petOptionsShark, function(selected, uuids)
+                selectedPetsShark = selected
+                selectedUUIDsShark = uuids
+                _G[SAVE_KEY_SHARK] = uuids
+                updatePetInfoShark(selected)
+                print("[AutoShark] SHARK COUNT:", #selected)
+            end, "SHARK")
         end
     })
     sectionShark:AddButton({ Title = "↻ Refresh Daftar Shark", Callback = function() refreshPetDropdownShark() end })
@@ -535,25 +572,14 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Values = {},
         Multi = true,
         Default = {},
-        Callback = function(selectedUUIDs)
-            print("[AutoShark] TARGET CALLBACK dengan UUIDs:", selectedUUIDs)
-            if selectedUUIDs and type(selectedUUIDs) == "table" then
-                local validUUIDs = {}
-                for _, uuid in ipairs(selectedUUIDs) do
-                    if petOptionsTarget[uuid] then
-                        table.insert(validUUIDs, uuid)
-                    end
-                end
-                selectedUUIDsTarget = validUUIDs
-                _G[SAVE_KEY_TARGET] = validUUIDs
-                updatePetInfoTarget(validUUIDs)
-                print("[AutoShark] TARGET COUNT:", #selectedUUIDsTarget)
-            else
-                selectedUUIDsTarget = {}
-                _G[SAVE_KEY_TARGET] = {}
-                updatePetInfoTarget({})
-                print("[AutoShark] TARGET COUNT: 0 (cleared)")
-            end
+        Callback = function()
+            handleDropdownSelection(dropdownControlTarget, petOptionsTarget, function(selected, uuids)
+                selectedPetsTarget = selected
+                selectedUUIDsTarget = uuids
+                _G[SAVE_KEY_TARGET] = uuids
+                updatePetInfoTarget(selected)
+                print("[AutoShark] TARGET COUNT:", #selected)
+            end, "TARGET")
         end
     })
     sectionTarget:AddButton({ Title = "↻ Refresh Daftar Target", Callback = function() refreshPetDropdownTarget() end })
@@ -565,25 +591,14 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Values = {},
         Multi = true,
         Default = {},
-        Callback = function(selectedUUIDs)
-            print("[AutoShark] TUMBAL CALLBACK dengan UUIDs:", selectedUUIDs)
-            if selectedUUIDs and type(selectedUUIDs) == "table" then
-                local validUUIDs = {}
-                for _, uuid in ipairs(selectedUUIDs) do
-                    if petOptionsTumbal[uuid] then
-                        table.insert(validUUIDs, uuid)
-                    end
-                end
-                selectedUUIDsTumbal = validUUIDs
-                _G[SAVE_KEY_TUMBAL] = validUUIDs
-                updatePetInfoTumbal(validUUIDs)
-                print("[AutoShark] TUMBAL COUNT:", #selectedUUIDsTumbal)
-            else
-                selectedUUIDsTumbal = {}
-                _G[SAVE_KEY_TUMBAL] = {}
-                updatePetInfoTumbal({})
-                print("[AutoShark] TUMBAL COUNT: 0 (cleared)")
-            end
+        Callback = function()
+            handleDropdownSelection(dropdownControlTumbal, petOptionsTumbal, function(selected, uuids)
+                selectedPetsTumbal = selected
+                selectedUUIDsTumbal = uuids
+                _G[SAVE_KEY_TUMBAL] = uuids
+                updatePetInfoTumbal(selected)
+                print("[AutoShark] TUMBAL COUNT:", #selected)
+            end, "TUMBAL")
         end
     })
     sectionTumbal:AddButton({ Title = "↻ Refresh Daftar Tumbal", Callback = function() refreshPetDropdownTumbal() end })
@@ -596,7 +611,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = false,
         Default = "",
         Callback = function(selected)
-            print("[AutoShark] MUTASI CALLBACK:", selected)
+            print("[AutoShark] MUTASI CALLBACK TRIGGERED:", selected)
             if selected and mutationOptions[selected] then
                 selectedMutation = selected
                 _G[SAVE_KEY_MUTATION] = selected
@@ -652,7 +667,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         autoToggleRef:SetValue(autoSharkEnabled)
     end
 
-    print("[AutoShark.lua] Siap dengan UUID sebagai nilai.")
+    print("[AutoShark.lua] Tab AutoShark siap (menggunakan dropdown.Value).")
 end
 
 return AutoShark
