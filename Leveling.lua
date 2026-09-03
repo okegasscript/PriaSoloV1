@@ -311,7 +311,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selectedLabels)
-            if selectedLabels and #selectedLabels > 0 then
+            if selectedLabels and type(selectedLabels) == "table" and #selectedLabels > 0 then
                 local selected = {}; local uuids = {}
                 for _, label in ipairs(selectedLabels) do
                     if petOptionsLvl[label] then
@@ -339,7 +339,7 @@ function Leveling.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selectedLabels)
-            if selectedLabels and #selectedLabels > 0 then
+            if selectedLabels and type(selectedLabels) == "table" and #selectedLabels > 0 then
                 local selected = {}; local uuids = {}
                 for _, label in ipairs(selectedLabels) do
                     if petOptionsTarget[label] then
