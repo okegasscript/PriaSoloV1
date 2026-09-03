@@ -1,20 +1,19 @@
 -- ============================================================
 -- MAIN SCRIPT - Pria Solo HUB (Final)
--- Memuat semua modul terpisah: DataPetModule, Leveling, PNP, AutoShark
+-- Memuat semua modul terpisah
 -- ============================================================
 
--- Load Library Fluent
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 -- ============================================================
--- INISIALISASI GLOBAL UNTUK MUTUAL EXCLUSION
+-- INISIALISASI GLOBAL
 -- ============================================================
-_G.ACTIVE_MODULE = nil      -- "Leveling" atau "AutoShark"
+_G.ACTIVE_MODULE = nil
 _G.LEVELING_TOGGLE = nil
 _G.AUTO_SHARK_TOGGLE = nil
-_G.GardenCFrame = nil       -- akan diisi saat equip pertama
+_G.GardenCFrame = nil
 
 -- ============================================================
 -- LOAD DATAPETMODULE
@@ -31,7 +30,7 @@ else
 end
 
 -- ============================================================
--- BUAT WINDOW UTAMA
+-- BUAT WINDOW
 -- ============================================================
 local Window = Fluent:CreateWindow({
     Title = "Pria Solo HUB",
@@ -43,75 +42,64 @@ local Window = Fluent:CreateWindow({
 })
 
 -- ============================================================
--- HAPUS PANGGILAN SelectTab YANG BERMASALAH
--- ============================================================
--- Tidak perlu langsung pilih tab, biarkan user pilih sendiri
-
--- ============================================================
--- LOAD & SETUP LEVELING.LUA
+-- LOAD LEVELING
 -- ============================================================
 local LevelingModule
-local levelingLoadSuccess, levelingLoadResult = pcall(function()
+local lvlSuccess, lvlResult = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/Leveling.lua"))()
 end)
-if levelingLoadSuccess and levelingLoadResult then
-    LevelingModule = levelingLoadResult
+if lvlSuccess and lvlResult then
+    LevelingModule = lvlResult
     if type(LevelingModule.Setup) == "function" then
         LevelingModule.Setup(Window, DataPetModule, Fluent)
-        print("[Main] Leveling.lua berhasil dimuat dan dijalankan")
-    else
-        warn("[Main] Leveling.lua tidak memiliki fungsi Setup")
+        print("[Main] Leveling.lua berhasil")
     end
 else
-    warn("[Main] Gagal memuat Leveling.lua:", levelingLoadResult)
-    local fallbackTab = Window:AddTab({ Title = "Leveling" })
-    fallbackTab:AddParagraph({ Title = "Error", Content = "Gagal memuat Leveling.lua" })
+    warn("[Main] Gagal memuat Leveling.lua:", lvlResult)
+    local fallback = Window:AddTab({ Title = "Leveling" })
+    fallback:AddParagraph({ Title = "Error", Content = "Gagal memuat Leveling.lua" })
 end
 
 -- ============================================================
--- LOAD & SETUP PNP.LUA
+-- LOAD PNP
 -- ============================================================
 local PNPModule
-local pnpLoadSuccess, pnpLoadResult = pcall(function()
+local pnpSuccess, pnpResult = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/PNP.lua"))()
 end)
-if pnpLoadSuccess and pnpLoadResult then
-    PNPModule = pnpLoadResult
+if pnpSuccess and pnpResult then
+    PNPModule = pnpResult
     if type(PNPModule.Setup) == "function" then
         PNPModule.Setup(Window, DataPetModule, Fluent)
-        print("[Main] PNP.lua berhasil dimuat dan dijalankan")
-    else
-        warn("[Main] PNP.lua tidak memiliki fungsi Setup")
+        print("[Main] PNP.lua berhasil")
     end
 else
-    warn("[Main] Gagal memuat PNP.lua:", pnpLoadResult)
-    local fallbackTab = Window:AddTab({ Title = "PNP" })
-    fallbackTab:AddParagraph({ Title = "Error", Content = "Gagal memuat PNP.lua" })
+    warn("[Main] Gagal memuat PNP.lua:", pnpResult)
+    local fallback = Window:AddTab({ Title = "PNP" })
+    fallback:AddParagraph({ Title = "Error", Content = "Gagal memuat PNP.lua" })
 end
 
 -- ============================================================
--- LOAD & SETUP AUTOSHARK.LUA
+-- LOAD AUTOSHARK
 -- ============================================================
 local AutoSharkModule
-local sharkLoadSuccess, sharkLoadResult = pcall(function()
+local sharkSuccess, sharkResult = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/AutoShark.lua"))()
 end)
-if sharkLoadSuccess and sharkLoadResult then
-    AutoSharkModule = sharkLoadResult
+if sharkSuccess and sharkResult then
+    AutoSharkModule = sharkResult
     if type(AutoSharkModule.Setup) == "function" then
         AutoSharkModule.Setup(Window, DataPetModule, Fluent)
-        print("[Main] AutoShark.lua berhasil dimuat dan dijalankan")
-    else
-        warn("[Main] AutoShark.lua tidak memiliki fungsi Setup")
+        print("[Main] AutoShark.lua berhasil")
     end
 else
-    warn("[Main] Gagal memuat AutoShark.lua:", sharkLoadResult)
-    local fallbackTab = Window:AddTab({ Title = "AutoShark" })
-    fallbackTab:AddParagraph({ Title = "Error", Content = "Gagal memuat AutoShark.lua" })
+    warn("[Main] Gagal memuat AutoShark.lua:", sharkResult)
+    local fallback = Window:AddTab({ Title = "AutoShark" })
+    fallback:AddParagraph({ Title = "Error", Content = "Gagal memuat AutoShark.lua" })
 end
 
 -- ============================================================
--- SETUP SAVEMANAGER & INTERFACEMANAGER
+-- SAVEMANAGER
 -- ============================================================
 pcall(function()
     SaveManager:SetLibrary(Fluent)
@@ -128,13 +116,10 @@ pcall(function()
     InterfaceManager:Load()
 end)
 
--- ============================================================
--- NOTIFIKASI AWAL
--- ============================================================
 Fluent:Notify({
     Title = "Pria Solo HUB",
-    Description = "Script siap digunakan! (Tema Rose - Modular)",
+    Description = "Script siap digunakan! (Tema Rose)",
     Duration = 3
 })
 
-print("[Main] Pria Solo HUB selesai dimuat (semua modul terpisah)")
+print("[Main] Pria Solo HUB selesai dimuat.")
