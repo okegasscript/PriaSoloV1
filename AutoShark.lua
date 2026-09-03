@@ -1,5 +1,5 @@
 -- ============================================================
--- AutoShark.lua - Modul Tab AutoShark (FINAL dengan label)
+-- AutoShark.lua - Modul Tab AutoShark (FIXED LABEL)
 -- ============================================================
 
 local AutoShark = {}
@@ -8,7 +8,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     local AutoSharkTab = Window:AddTab({ Title = "AutoShark" })
 
     -- Variabel untuk menyimpan mapping label -> pet
-    local petOptionsShark = {}      -- label -> pet data
+    local petOptionsShark = {}
     local petOptionsTarget = {}
     local petOptionsTumbal = {}
 
@@ -318,7 +318,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
     end
 
     -- ============================================================
-    -- REFRESH DROPDOWN (menggunakan label)
+    -- REFRESH DROPDOWN (dengan LABEL)
     -- ============================================================
     local function refreshPetDropdownShark()
         if not DataPetModule then return end
@@ -342,7 +342,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
             -- Restore dari _G
             local savedUUIDs = _G[SAVE_KEY_SHARK] or {}
             if #savedUUIDs > 0 then
-                -- Cari label yang sesuai dengan UUID tersimpan
                 local restoredLabels = {}
                 for _, uuid in ipairs(savedUUIDs) do
                     for label, pet in pairs(petOptionsShark) do
@@ -529,8 +528,7 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selected)
-            -- selected adalah tabel dengan key = label, value = boolean
-            print("[AutoShark] SHARK SELECTED RAW:", selected)
+            -- selected adalah tabel { label = true/false }
             local uuids = {}
             if type(selected) == "table" then
                 for label, isSelected in pairs(selected) do
@@ -556,7 +554,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selected)
-            print("[AutoShark] TARGET SELECTED RAW:", selected)
             local uuids = {}
             if type(selected) == "table" then
                 for label, isSelected in pairs(selected) do
@@ -582,7 +579,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = true,
         Default = {},
         Callback = function(selected)
-            print("[AutoShark] TUMBAL SELECTED RAW:", selected)
             local uuids = {}
             if type(selected) == "table" then
                 for label, isSelected in pairs(selected) do
@@ -608,7 +604,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Multi = false,
         Default = "",
         Callback = function(selected)
-            print("[AutoShark] MUTASI SELECTED:", selected)
             if selected and mutationOptions[selected] then
                 selectedMutation = selected
                 _G[SAVE_KEY_MUTATION] = selected
@@ -628,7 +623,6 @@ function AutoShark.Setup(Window, DataPetModule, Fluent)
         Description = "Aktifkan untuk menjalankan Auto Shark",
         Default = _G[ENABLE_KEY] or false,
         Callback = function(value)
-            print("[AutoShark] TOGGLE:", value)
             if value then
                 if _G.ACTIVE_MODULE == "Leveling" and _G.LEVELING_TOGGLE then
                     _G.LEVELING_TOGGLE:SetValue(false)
