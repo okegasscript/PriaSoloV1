@@ -1,20 +1,15 @@
 -- ============================================================
--- SCRIPT: Pria Solo HUB - Auto Shark Tab (WindUI)
--- Menggunakan WindUI dari GitHub & DataPetModule
--- Ukuran Window: 400x600
+-- SCRIPT: Pria Solo HUB - Auto Shark Tab (WindUI + ConfigManager)
 -- ============================================================
 
 -- ============================================================
--- 1. LOAD WindUI dari repository yang diberikan
+-- 1. LOAD WindUI
 -- ============================================================
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-
-if not WindUI then
-    error("Gagal memuat WindUI!")
-end
+if not WindUI then error("Gagal memuat WindUI!") end
 
 -- ============================================================
--- 2. LOAD DataPetModule dari GitHub
+-- 2. LOAD DataPetModule
 -- ============================================================
 local DataPetModule = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/DataPetModule.lua"
@@ -25,7 +20,7 @@ if not DataPetModule then error("Gagal memuat DataPetModule!") end
 -- 3. FUNGSI BANTUAN
 -- ============================================================
 
--- Ambil daftar mutasi unik dari data pet
+-- Ambil daftar mutasi unik
 local function getMutationList()
     local mutations = {}
     local allPets = DataPetModule.getAllPets()
@@ -44,12 +39,12 @@ local function getMutationList()
     return mutations
 end
 
--- Format tampilan pet yang pendek
+-- Format tampilan pet
 local function formatPetDisplay(pet)
     return string.format("%s [%s] Lv.%d", pet.name, pet.mutation, pet.level)
 end
 
--- Bangun opsi dropdown dalam format WindUI: {Title = display, UUID = uuid}
+-- Bangun opsi dropdown: {Title = display, Value = uuid}
 local function buildDropdownOptions(petList)
     local options = {}
     local nameCount = {}
@@ -62,175 +57,218 @@ local function buildDropdownOptions(petList)
         else
             nameCount[baseDisplay] = 1
         end
-        table.insert(options, { Title = display, UUID = pet.uuid })
+        table.insert(options, { Title = display, Value = pet.uuid })
     end
     if #options == 0 then
-        table.insert(options, { Title = "Tidak ada pet", UUID = "" })
+        table.insert(options, { Title = "Tidak ada pet", Value = "" })
     end
     return options
 end
 
 -- ============================================================
--- 4. BUAT WINDOW DENGAN WINDUI (Ukuran 400x600)
+-- 4. BUAT WINDOW DAN CONFIG MANAGER
 -- ============================================================
 local Window = WindUI:CreateWindow({
     Title = "Pria Solo HUB",
+    Folder = "PriaSoloHUB",
     Size = UDim2.new(0, 400, 0, 600),
     Center = true,
-    AutoShow = true,  -- AutoShow sudah true, jadi window otomatis muncul
+    AutoShow = true,
     Draggable = true,
 })
 
+-- Buat config file
+local MyConfig = Window.ConfigManager:Config("AutoSharkConfig")
+
 -- ============================================================
--- 5. BUAT TAB "Auto Shark"
+-- 5. TAB AUTO SHARK (pertama)
 -- ============================================================
 local TabAutoShark = Window:Tab({
     Title = "Auto Shark",
     Icon = "solar:shark-bold",
 })
 
--- Buat Section untuk dropdown
-local AutoSharkSection = TabAutoShark:Section({
-    Title = "Auto Shark Settings",
-})
+local SettingsSection = TabAutoShark:Section({ Title = "Auto Shark Settings" })
 
 -- ============================================================
--- 6. DROPDOWN "Pilih Tim Shark" (favorit = true)
+-- 6. DROPDOWN 1: Pilih Tim Shark (Multi-Select + Search)
 -- ============================================================
 local sharkPets = DataPetModule.findPets({ isFavorite = true })
 local sharkOptions = buildDropdownOptions(sharkPets)
-local selectedTimSharkUUID = sharkOptions[1] and sharkOptions[1].UUID or ""
 
-local dropdownTimShark = AutoSharkSection:Dropdown({
+-- Ambil nilai default dari config (list UUID)
+local defaultSharkUUIDs = MyConfig:Get("tim_shark_uuids") or {}
+
+local dropdownTimShark = SettingsSection:Dropdown({
     Title = "Pilih Tim Shark",
+    Multi = true,
+    Search = true,
     Values = sharkOptions,
-    Value = sharkOptions[1] and sharkOptions[1].Title or "Tidak ada pet",
-    Callback = function(option)
-        selectedTimSharkUUID = option.UUID or ""
-        print("Tim Shark UUID:", selectedTimSharkUUID)
-        _G.selectedTimSharkUUID = selectedTimSharkUUID
+    Value = defaultSharkUUIDs,  -- list UUID yang terpilih
+    Flag = "tim_shark_uuids",
+    Callback = function(selectedUUIDs)
+        -- selectedUUIDs adalah list UUID yang dipilih
+        MyConfig:Set("tim_shark_uuids", selectedUUIDs)
+        MyConfig:Save()
+        print("Tim Shark UUIDs:", table.concat(selectedUUIDs, ", "))
     end
 })
 
-AutoSharkSection:Space()
+SettingsSection:Space()
 
 -- ============================================================
--- 7. DROPDOWN "Pilih Pet Target" (favorit = false, mutasi Normal)
+-- 7. DROPDOWN 2: Pilih Pet Target (Multi-Select + Search)
 -- ============================================================
 local targetPets = DataPetModule.findPets({
     isFavorite = false,
     mutation = "Normal"
 })
 local targetOptions = buildDropdownOptions(targetPets)
-local selectedTargetUUID = targetOptions[1] and targetOptions[1].UUID or ""
 
-local dropdownPetTarget = AutoSharkSection:Dropdown({
+local defaultTargetUUIDs = MyConfig:Get("pet_target_uuids") or {}
+
+local dropdownPetTarget = SettingsSection:Dropdown({
     Title = "Pilih Pet Target",
+    Multi = true,
+    Search = true,
     Values = targetOptions,
-    Value = targetOptions[1] and targetOptions[1].Title or "Tidak ada pet",
-    Callback = function(option)
-        selectedTargetUUID = option.UUID or ""
-        print("Pet Target UUID:", selectedTargetUUID)
-        _G.selectedTargetUUID = selectedTargetUUID
+    Value = defaultTargetUUIDs,
+    Flag = "pet_target_uuids",
+    Callback = function(selectedUUIDs)
+        MyConfig:Set("pet_target_uuids", selectedUUIDs)
+        MyConfig:Save()
+        print("Pet Target UUIDs:", table.concat(selectedUUIDs, ", "))
     end
 })
 
-AutoSharkSection:Space()
+SettingsSection:Space()
 
 -- ============================================================
--- 8. DROPDOWN "Pilih Target Mutasi" (daftar mutasi)
+-- 8. DROPDOWN 3: Pilih Target Mutasi (Single-Select, tanpa search)
 -- ============================================================
 local mutationList = getMutationList()
 local mutOptions = {}
 for _, m in ipairs(mutationList) do
-    table.insert(mutOptions, { Title = m, UUID = m })
+    table.insert(mutOptions, { Title = m, Value = m })
 end
-local selectedMutation = mutOptions[1] and mutOptions[1].Title or "Normal"
 
-local dropdownTargetMutasi = AutoSharkSection:Dropdown({
+local defaultMutation = MyConfig:Get("target_mutasi") or "Normal"
+
+local dropdownTargetMutasi = SettingsSection:Dropdown({
     Title = "Pilih Target Mutasi",
+    Multi = false,
+    Search = false,
     Values = mutOptions,
-    Value = mutOptions[1] and mutOptions[1].Title or "Normal",
-    Callback = function(option)
-        selectedMutation = option.Title or "Normal"
-        print("Target Mutasi:", selectedMutation)
-        _G.selectedMutation = selectedMutation
+    Value = defaultMutation,
+    Flag = "target_mutasi",
+    Callback = function(selected)
+        MyConfig:Set("target_mutasi", selected)
+        MyConfig:Save()
+        print("Target Mutasi:", selected)
         -- Update tumbal otomatis
-        updateTumbalDropdown(selectedMutation)
+        updateTumbalDropdown(selected)
     end
 })
 
-AutoSharkSection:Space()
+SettingsSection:Space()
 
 -- ============================================================
--- 9. DROPDOWN "Pilih Pet Tumbal" (favorit = false, mutasi sesuai pilihan)
+-- 9. DROPDOWN 4: Pilih Pet Tumbal (Multi-Select + Search)
+--    Dinamis berdasarkan mutasi yang dipilih
 -- ============================================================
 local tumbalOptions = {}
-local selectedTumbalUUID = ""
+local defaultTumbalUUIDs = MyConfig:Get("pet_tumbal_uuids") or {}
 
--- Fungsi untuk memperbarui dropdown tumbal
+-- Fungsi update tumbal
 local function updateTumbalDropdown(mutation)
     local tumbalPets = DataPetModule.findPets({
         isFavorite = false,
         mutation = mutation
     })
     tumbalOptions = buildDropdownOptions(tumbalPets)
+
+    -- Ambil UUID yang tersimpan, filter hanya yang ada di opsi baru
+    local savedUUIDs = MyConfig:Get("pet_tumbal_uuids") or {}
+    local validUUIDs = {}
+    for _, uuid in ipairs(savedUUIDs) do
+        for _, opt in ipairs(tumbalOptions) do
+            if opt.Value == uuid then
+                table.insert(validUUIDs, uuid)
+                break
+            end
+        end
+    end
+
     dropdownPetTumbal:Refresh(tumbalOptions)
-    dropdownPetTumbal:Set(tumbalOptions[1] and tumbalOptions[1].Title or "Tidak ada pet")
-    -- Update selected UUID
-    selectedTumbalUUID = tumbalOptions[1] and tumbalOptions[1].UUID or ""
-    _G.selectedTumbalUUID = selectedTumbalUUID
+    dropdownPetTumbal:Set(validUUIDs)  -- set multi-select values (list UUID)
 end
 
--- Inisialisasi tumbal dengan mutasi default
-local initialMut = mutOptions[1] and mutOptions[1].Title or "Normal"
+-- Inisialisasi tumbal dengan mutasi tersimpan
+local initialMut = MyConfig:Get("target_mutasi") or "Normal"
 local initialTumbalPets = DataPetModule.findPets({
     isFavorite = false,
     mutation = initialMut
 })
 tumbalOptions = buildDropdownOptions(initialTumbalPets)
 
-local dropdownPetTumbal = AutoSharkSection:Dropdown({
+-- Filter default UUIDs yang valid
+local validDefaultTumbal = {}
+for _, uuid in ipairs(defaultTumbalUUIDs) do
+    for _, opt in ipairs(tumbalOptions) do
+        if opt.Value == uuid then
+            table.insert(validDefaultTumbal, uuid)
+            break
+        end
+    end
+end
+
+local dropdownPetTumbal = SettingsSection:Dropdown({
     Title = "Pilih Pet Tumbal",
+    Multi = true,
+    Search = true,
     Values = tumbalOptions,
-    Value = tumbalOptions[1] and tumbalOptions[1].Title or "Tidak ada pet",
-    Callback = function(option)
-        selectedTumbalUUID = option.UUID or ""
-        print("Pet Tumbal UUID:", selectedTumbalUUID)
-        _G.selectedTumbalUUID = selectedTumbalUUID
+    Value = validDefaultTumbal,
+    Flag = "pet_tumbal_uuids",
+    Callback = function(selectedUUIDs)
+        MyConfig:Set("pet_tumbal_uuids", selectedUUIDs)
+        MyConfig:Save()
+        print("Pet Tumbal UUIDs:", table.concat(selectedUUIDs, ", "))
     end
 })
 
 -- ============================================================
--- 10. SECTION UNTUK TOMBOL AKSI
+-- 10. SECTION TOMBOL AKSI & TOGGLE START/STOP
 -- ============================================================
-local ActionSection = TabAutoShark:Section({
-    Title = "Actions",
+local ActionSection = TabAutoShark:Section({ Title = "Actions" })
+
+-- Toggle Start/Stop
+local isRunning = MyConfig:Get("is_running") or false
+
+local toggleStartStop = ActionSection:Toggle({
+    Title = "Start / Stop",
+    Value = isRunning,
+    Flag = "is_running",
+    Callback = function(value)
+        MyConfig:Set("is_running", value)
+        MyConfig:Save()
+        if value then
+            print("Auto Shark DIMULAI!")
+            startAutoShark()
+        else
+            print("Auto Shark DIHENTIKAN!")
+            stopAutoShark()
+        end
+    end
 })
 
--- Tombol refresh tumbal (jika ingin manual)
+-- Tombol refresh tumbal manual
 ActionSection:Button({
     Title = "Refresh Pet Tumbal",
     Justify = "Center",
     Callback = function()
-        local currentMut = selectedMutation or "Normal"
+        local currentMut = dropdownTargetMutasi:GetValue()
         updateTumbalDropdown(currentMut)
         print("Pet tumbal diperbarui")
-    end
-})
-
-ActionSection:Space()
-
--- Tombol tampilkan UUID terpilih
-ActionSection:Button({
-    Title = "Tampilkan UUID Terpilih",
-    Justify = "Center",
-    Callback = function()
-        print("=== UUID Terpilih ===")
-        print("Tim Shark   : " .. tostring(selectedTimSharkUUID))
-        print("Pet Target  : " .. tostring(selectedTargetUUID))
-        print("Pet Tumbal  : " .. tostring(selectedTumbalUUID))
-        print("Target Mutasi : " .. tostring(selectedMutation))
     end
 })
 
@@ -245,38 +283,95 @@ ActionSection:Button({
         local newShark = DataPetModule.findPets({ isFavorite = true })
         local newOpts = buildDropdownOptions(newShark)
         dropdownTimShark:Refresh(newOpts)
-        dropdownTimShark:Set(newOpts[1] and newOpts[1].Title or "Tidak ada pet")
-        selectedTimSharkUUID = newOpts[1] and newOpts[1].UUID or ""
+        -- Pertahankan pilihan lama yang masih valid
+        local oldUUIDs = MyConfig:Get("tim_shark_uuids") or {}
+        local keepUUIDs = {}
+        for _, uuid in ipairs(oldUUIDs) do
+            for _, opt in ipairs(newOpts) do
+                if opt.Value == uuid then
+                    table.insert(keepUUIDs, uuid)
+                    break
+                end
+            end
+        end
+        dropdownTimShark:Set(keepUUIDs)
 
         -- Refresh Pet Target
         local newTarget = DataPetModule.findPets({ isFavorite = false, mutation = "Normal" })
         local newTargetOpts = buildDropdownOptions(newTarget)
         dropdownPetTarget:Refresh(newTargetOpts)
-        dropdownPetTarget:Set(newTargetOpts[1] and newTargetOpts[1].Title or "Tidak ada pet")
-        selectedTargetUUID = newTargetOpts[1] and newTargetOpts[1].UUID or ""
+        local oldTargetUUIDs = MyConfig:Get("pet_target_uuids") or {}
+        local keepTargetUUIDs = {}
+        for _, uuid in ipairs(oldTargetUUIDs) do
+            for _, opt in ipairs(newTargetOpts) do
+                if opt.Value == uuid then
+                    table.insert(keepTargetUUIDs, uuid)
+                    break
+                end
+            end
+        end
+        dropdownPetTarget:Set(keepTargetUUIDs)
 
         -- Refresh Target Mutasi
         local newMuts = getMutationList()
         local newMutOpts = {}
         for _, m in ipairs(newMuts) do
-            table.insert(newMutOpts, { Title = m, UUID = m })
+            table.insert(newMutOpts, { Title = m, Value = m })
         end
         dropdownTargetMutasi:Refresh(newMutOpts)
-        dropdownTargetMutasi:Set(newMutOpts[1] and newMutOpts[1].Title or "Normal")
-        selectedMutation = newMutOpts[1] and newMutOpts[1].Title or "Normal"
+        dropdownTargetMutasi:Set(MyConfig:Get("target_mutasi") or "Normal")
 
         -- Refresh Tumbal
-        updateTumbalDropdown(selectedMutation)
+        updateTumbalDropdown(MyConfig:Get("target_mutasi") or "Normal")
 
         print("Semua data pet di-refresh!")
     end
 })
 
 -- ============================================================
--- 11. WINDOW OTOMATIS TAMPIL (AutoShow = true)
+-- 11. FUNGSI START/STOP (contoh)
 -- ============================================================
--- Tidak perlu memanggil Window:Show() karena AutoShow sudah true
--- Jika ingin dipanggil manual, gunakan Window:Open() bukan Show()
--- Window:Open() -- opsional jika AutoShow false
+local autoSharkCoroutine = nil
 
-print("Pria Solo HUB - Auto Shark Tab siap digunakan dengan WindUI!")
+local function startAutoShark()
+    if autoSharkCoroutine then return end
+    autoSharkCoroutine = coroutine.create(function()
+        while MyConfig:Get("is_running") do
+            -- Ambil semua UUID yang dipilih dari config
+            local timShark = MyConfig:Get("tim_shark_uuids") or {}
+            local petTarget = MyConfig:Get("pet_target_uuids") or {}
+            local petTumbal = MyConfig:Get("pet_tumbal_uuids") or {}
+            local targetMutasi = MyConfig:Get("target_mutasi") or "Normal"
+
+            print("=== AUTO SHARK RUNNING ===")
+            print("Tim Shark:", table.concat(timShark, ", "))
+            print("Pet Target:", table.concat(petTarget, ", "))
+            print("Pet Tumbal:", table.concat(petTumbal, ", "))
+            print("Target Mutasi:", targetMutasi)
+
+            -- Lakukan proses auto shark di sini...
+            wait(5)
+        end
+    end)
+    coroutine.resume(autoSharkCoroutine)
+end
+
+local function stopAutoShark()
+    if autoSharkCoroutine then
+        autoSharkCoroutine = nil
+        print("Auto Shark dihentikan.")
+    end
+end
+
+-- ============================================================
+-- 12. SIMPAN KONFIGURASI AWAL DAN TAMPILKAN WINDOW
+-- ============================================================
+MyConfig:Save()  -- simpan konfigurasi awal
+Window:Show()
+
+print("Pria Solo HUB - Auto Shark Tab siap digunakan!")
+
+-- Jalankan otomatis jika sebelumnya sedang berjalan
+if MyConfig:Get("is_running") then
+    toggleStartStop:Set(true)
+end
