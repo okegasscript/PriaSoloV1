@@ -1,6 +1,7 @@
 -- ============================================================
--- SCRIPT: Pria Solo HUB - Auto Shark Tab (Ukuran 400x600)
--- Menggunakan pola LinoriaLib sesuai contoh
+-- SCRIPT: Pria Solo HUB - Auto Shark Tab
+-- Menggunakan DataPetModule dari GitHub & LinoriaLib
+-- Ukuran Window: 400x600
 -- ============================================================
 
 -- ============================================================
@@ -60,7 +61,7 @@ local function buildDropdownData(petList)
     local values = {}
     for _, pet in ipairs(petList) do
         local display = formatPetDisplay(pet)
-        -- Tambahkan UUID untuk memastikan unik jika ada nama yang sama
+        -- Tambahkan UUID singkat untuk memastikan unik
         display = display .. " | " .. tostring(pet.uuid):sub(1, 8)
         displayToUUID[display] = pet.uuid
         table.insert(values, display)
@@ -81,27 +82,37 @@ local Window = Library:CreateWindow({
     Center = true,
     AutoShow = true,
     TabPadding = 8,
+    MenuFadeTime = 0.2,
     Size = UDim2.new(0, 400, 0, 600)
 })
 
+-- ============================================================
+-- 5. BUAT TAB & GROUPBOX
+-- ============================================================
 local TabAutoShark = Window:AddTab("Auto Shark")
+local UISettingsTab = Window:AddTab("UI Settings")
+
+local AutoSharkGroup = TabAutoShark:AddLeftGroupbox("Auto Shark Settings")
+local ActionGroup = TabAutoShark:AddRightGroupbox("Actions")
+
+local UISettingsGroup = UISettingsTab:AddLeftGroupbox("Settings")
 
 -- ============================================================
--- 5. DROPDOWN "Pilih Tim Shark" (favorit = true)
+-- 6. DROPDOWN "Pilih Tim Shark" (favorit = true)
 -- ============================================================
 local sharkPets = DataPetModule.findPets({ isFavorite = true })
 local sharkValues, sharkMap = buildDropdownData(sharkPets)
 
-local dropdownTimShark = TabAutoShark:AddDropdown("TimShark", {
+local dropdownTimShark = AutoSharkGroup:AddDropdown("TimShark", {
     Values = sharkValues,
     Default = sharkValues[1] or "",
-    Multi = false,   -- single select
+    Multi = false,
     Text = "Pilih Tim Shark",
     Tooltip = "Pilih pet favorit untuk tim shark"
 })
 
 -- ============================================================
--- 6. DROPDOWN "Pilih Pet Target" (favorit = false, mutasi Normal)
+-- 7. DROPDOWN "Pilih Pet Target" (favorit = false, mutasi Normal)
 -- ============================================================
 local targetPets = DataPetModule.findPets({
     isFavorite = false,
@@ -109,7 +120,7 @@ local targetPets = DataPetModule.findPets({
 })
 local targetValues, targetMap = buildDropdownData(targetPets)
 
-local dropdownPetTarget = TabAutoShark:AddDropdown("PetTarget", {
+local dropdownPetTarget = AutoSharkGroup:AddDropdown("PetTarget", {
     Values = targetValues,
     Default = targetValues[1] or "",
     Multi = false,
@@ -118,7 +129,7 @@ local dropdownPetTarget = TabAutoShark:AddDropdown("PetTarget", {
 })
 
 -- ============================================================
--- 7. DROPDOWN "Pilih Target Mutasi" (daftar semua mutasi)
+-- 8. DROPDOWN "Pilih Target Mutasi" (daftar semua mutasi)
 -- ============================================================
 local mutationList = getMutationList()
 local mutValues = {}
@@ -128,7 +139,7 @@ for _, m in ipairs(mutationList) do
     table.insert(mutValues, m)
 end
 
-local dropdownTargetMutasi = TabAutoShark:AddDropdown("TargetMutasi", {
+local dropdownTargetMutasi = AutoSharkGroup:AddDropdown("TargetMutasi", {
     Values = mutValues,
     Default = mutValues[1] or "Normal",
     Multi = false,
@@ -137,7 +148,7 @@ local dropdownTargetMutasi = TabAutoShark:AddDropdown("TargetMutasi", {
 })
 
 -- ============================================================
--- 8. DROPDOWN "Pilih Pet Tumbal" (favorit = false, mutasi sesuai pilihan)
+-- 9. DROPDOWN "Pilih Pet Tumbal" (favorit = false, mutasi sesuai pilihan)
 -- ============================================================
 -- Simpan mapping dan nilai untuk tumbal
 local tumbalValues = {}
@@ -166,7 +177,7 @@ local initVals, initMap = buildDropdownData(initialTumbalPets)
 tumbalValues = initVals
 tumbalMap = initMap
 
-local dropdownPetTumbal = TabAutoShark:AddDropdown("PetTumbal", {
+local dropdownPetTumbal = AutoSharkGroup:AddDropdown("PetTumbal", {
     Values = tumbalValues,
     Default = tumbalValues[1] or "",
     Multi = false,
@@ -175,16 +186,11 @@ local dropdownPetTumbal = TabAutoShark:AddDropdown("PetTumbal", {
 })
 
 -- ============================================================
--- 9. EVENT HANDLER: update tumbal saat mutasi berubah
+-- 10. TOMBOL DI ACTION GROUP
 -- ============================================================
--- Karena Linoria tidak menyediakan callback langsung untuk dropdown,
--- kita bisa menggunakan sinyal atau meng-override metode Value.
--- Cara sederhana: tambahkan tombol refresh atau gunakan task.wait untuk polling.
--- Tapi lebih baik kita pasang koneksi ke peristiwa perubahan.
--- Alternatif: kita buat tombol "Update Tumbal" manual.
--- Saya akan tambahkan tombol "Refresh Tumbal" agar user bisa update manual.
 
-TabAutoShark:AddButton({
+-- Tombol refresh tumbal (karena tidak ada event otomatis)
+ActionGroup:AddButton({
     Name = "Refresh Pet Tumbal",
     Callback = function()
         local selectedMut = dropdownTargetMutasi:GetValue()
@@ -193,15 +199,13 @@ TabAutoShark:AddButton({
     end
 })
 
--- ============================================================
--- 10. TOMBOL DEBUG / TAMPILKAN UUID
--- ============================================================
+-- Tombol tampilkan UUID terpilih
 local function getSelectedUUID(dropdownObj, map)
     local selectedText = dropdownObj:GetValue()
     return map[selectedText] or ""
 end
 
-TabAutoShark:AddButton({
+ActionGroup:AddButton({
     Name = "Tampilkan UUID Terpilih",
     Callback = function()
         local sharkUUID = getSelectedUUID(dropdownTimShark, sharkMap)
@@ -217,7 +221,8 @@ TabAutoShark:AddButton({
     end
 })
 
-TabAutoShark:AddButton({
+-- Tombol refresh semua data
+ActionGroup:AddButton({
     Name = "Refresh Semua Data Pet",
     Callback = function()
         -- Refresh Tim Shark
@@ -258,11 +263,9 @@ TabAutoShark:AddButton({
 })
 
 -- ============================================================
--- 11. SETUP THEME & SAVE
+-- 11. SETUP THEME & SAVE DI UI SETTINGS
 -- ============================================================
-local UISettingsTab = Window:AddTab("UI Settings")
-
-UISettingsTab:AddButton({
+UISettingsGroup:AddButton({
     Name = "Theme Manager",
     Callback = function()
         ThemeManager:SetTheme("Dark")
@@ -270,14 +273,14 @@ UISettingsTab:AddButton({
     end
 })
 
-UISettingsTab:AddButton({
+UISettingsGroup:AddButton({
     Name = "Save Config",
     Callback = function()
         SaveManager:SaveConfig()
     end
 })
 
-UISettingsTab:AddButton({
+UISettingsGroup:AddButton({
     Name = "Load Config",
     Callback = function()
         SaveManager:LoadConfig()
