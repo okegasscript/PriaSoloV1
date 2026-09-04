@@ -1,7 +1,6 @@
 -- ============================================================
 -- SCRIPT: Pria Solo HUB - Auto Shark Tab (WindUI + ConfigManager)
--- Perbaikan: State tersimpan di JSON dengan ConfigManager
--- Default Target Mutasi: Blossoming
+-- ClearGarden: Saat Start dan Stop, jeda 0.6 detik
 -- ============================================================
 
 -- ============================================================
@@ -22,7 +21,6 @@ if not DataPetModule then error("Gagal memuat DataPetModule!") end
 -- 3. FUNGSI BANTUAN
 -- ============================================================
 
--- Ambil daftar mutasi unik
 local function getMutationList()
     local mutations = {}
     local allPets = DataPetModule.getAllPets()
@@ -41,12 +39,10 @@ local function getMutationList()
     return mutations
 end
 
--- Format tampilan pet
 local function formatPetDisplay(pet)
     return string.format("%s [%s] Lv.%d", pet.name, pet.mutation, pet.level)
 end
 
--- Bangun opsi dropdown: {Title = display, Value = uuid}
 local function buildDropdownOptions(petList)
     local options = {}
     local nameCount = {}
@@ -72,20 +68,18 @@ end
 -- ============================================================
 local Window = WindUI:CreateWindow({
     Title = "Pria Solo HUB",
-    Folder = "PriaSoloHUB",  -- Folder tempat menyimpan config
+    Folder = "PriaSoloHUB",
     Size = UDim2.new(0, 400, 0, 600),
     Center = true,
     AutoShow = true,
     Draggable = true,
 })
 
--- Buat config file
 local MyConfig = Window.ConfigManager:Config("AutoSharkConfig")
--- Load config yang sudah ada (jika ada)
 MyConfig:Load()
 
 -- ============================================================
--- 5. TAB AUTO SHARK (pertama)
+-- 5. TAB AUTO SHARK
 -- ============================================================
 local TabAutoShark = Window:Tab({
     Title = "Auto Shark",
@@ -94,13 +88,9 @@ local TabAutoShark = Window:Tab({
 
 local SettingsSection = TabAutoShark:Section({ Title = "Auto Shark Settings" })
 
--- ============================================================
--- 6. DROPDOWN 1: Pilih Tim Shark (Multi-Select + Search)
--- ============================================================
+-- ========== DROPDOWN 1: Tim Shark ==========
 local sharkPets = DataPetModule.findPets({ isFavorite = true })
 local sharkOptions = buildDropdownOptions(sharkPets)
-
--- Ambil nilai default dari config (list UUID)
 local defaultSharkUUIDs = MyConfig:Get("tim_shark_uuids") or {}
 
 local dropdownTimShark = SettingsSection:Dropdown({
@@ -119,15 +109,12 @@ local dropdownTimShark = SettingsSection:Dropdown({
 
 SettingsSection:Space()
 
--- ============================================================
--- 7. DROPDOWN 2: Pilih Pet Target (Multi-Select + Search)
--- ============================================================
+-- ========== DROPDOWN 2: Pet Target ==========
 local targetPets = DataPetModule.findPets({
     isFavorite = false,
     mutation = "Normal"
 })
 local targetOptions = buildDropdownOptions(targetPets)
-
 local defaultTargetUUIDs = MyConfig:Get("pet_target_uuids") or {}
 
 local dropdownPetTarget = SettingsSection:Dropdown({
@@ -146,22 +133,17 @@ local dropdownPetTarget = SettingsSection:Dropdown({
 
 SettingsSection:Space()
 
--- ============================================================
--- 8. DROPDOWN 3: Pilih Target Mutasi (Single-Select, tanpa search)
--- DEFAULT: Blossoming
--- ============================================================
+-- ========== DROPDOWN 3: Target Mutasi (default Blossoming) ==========
 local mutationList = getMutationList()
 local mutOptions = {}
 for _, m in ipairs(mutationList) do
     table.insert(mutOptions, { Title = m, Value = m })
 end
 
--- Tentukan default: "Blossoming" jika ada
 local defaultMutation = "Blossoming"
 if not table.find(mutationList, defaultMutation) then
     defaultMutation = mutationList[1] or "Normal"
 end
--- Ambil dari config jika sudah tersimpan
 local savedMutation = MyConfig:Get("target_mutasi")
 if savedMutation and table.find(mutationList, savedMutation) then
     defaultMutation = savedMutation
@@ -184,33 +166,24 @@ local dropdownTargetMutasi = SettingsSection:Dropdown({
 
 SettingsSection:Space()
 
--- ============================================================
--- 9. DROPDOWN 4: Pilih Pet Tumbal (Multi-Select + Search)
---    Dinamis berdasarkan mutasi yang dipilih
--- ============================================================
+-- ========== DROPDOWN 4: Pet Tumbal (dinamis) ==========
 local tumbalOptions = {}
 local tumbalDropdownObject = nil
 
--- Fungsi untuk memperbarui dropdown tumbal
 local function updateTumbalDropdown(mutation)
     print("updateTumbalDropdown dipanggil dengan mutasi:", mutation)
-    
-    -- Ambil pet dengan mutasi tertentu dan bukan favorit
     local tumbalPets = DataPetModule.findPets({
         isFavorite = false,
         mutation = mutation
     })
-    
     print("Jumlah pet tumbal ditemukan:", #tumbalPets)
     if #tumbalPets > 0 then
         print("Contoh pet pertama:", tumbalPets[1].name, tumbalPets[1].mutation)
     end
     
-    -- Buat opsi baru
     local newOptions = buildDropdownOptions(tumbalPets)
     tumbalOptions = newOptions
     
-    -- Ambil UUID yang tersimpan sebelumnya
     local savedUUIDs = MyConfig:Get("pet_tumbal_uuids") or {}
     local validUUIDs = {}
     for _, uuid in ipairs(savedUUIDs) do
@@ -221,13 +194,10 @@ local function updateTumbalDropdown(mutation)
             end
         end
     end
-    
-    -- Jika tidak ada yang valid dan ada opsi, pilih opsi pertama
     if #validUUIDs == 0 and #newOptions > 0 and newOptions[1].Value ~= "" then
         table.insert(validUUIDs, newOptions[1].Value)
     end
     
-    -- Perbarui dropdown
     if tumbalDropdownObject then
         if tumbalDropdownObject.Refresh then
             tumbalDropdownObject:Refresh(newOptions)
@@ -240,7 +210,7 @@ local function updateTumbalDropdown(mutation)
     end
 end
 
--- Inisialisasi tumbal dengan mutasi default
+-- Inisialisasi tumbal
 local initialMut = defaultMutation
 local initialTumbalPets = DataPetModule.findPets({
     isFavorite = false,
@@ -279,11 +249,91 @@ local dropdownPetTumbal = SettingsSection:Dropdown({
 tumbalDropdownObject = dropdownPetTumbal
 
 -- ============================================================
--- 10. SECTION TOMBOL AKSI
+-- 6. SECTION TOMBOL AKSI
 -- ============================================================
 local ActionSection = TabAutoShark:Section({ Title = "Actions" })
 
--- Toggle Start/Stop
+-- ============================================================
+-- 7. CLEAR GARDEN (berjalan sekali, jeda 0.6 detik)
+-- ============================================================
+local function runClearGarden()
+    print("ClearGarden: Memulai proses...")
+    -- Ambil equipped pets
+    local equipped = DataPetModule.getEquippedPets()
+    if not equipped or next(equipped) == nil then
+        print("ClearGarden: Tidak ada pet terpasang.")
+        return
+    end
+    
+    -- Kumpulkan UUID
+    local uuids = {}
+    for uuid, _ in pairs(equipped) do
+        table.insert(uuids, uuid)
+    end
+    print("ClearGarden: Menemukan " .. #uuids .. " pet terpasang.")
+    
+    -- Path remote event
+    local Event = game:GetService("ReplicatedStorage"):FindFirstChild("GameEvents")
+    if not Event then
+        print("ClearGarden: GameEvents tidak ditemukan!")
+        return
+    end
+    local PetsService = Event:FindFirstChild("PetsService")
+    if not PetsService then
+        print("ClearGarden: PetsService tidak ditemukan!")
+        return
+    end
+    
+    -- Unequip satu per satu dengan jeda 0.6 detik
+    for i, uuid in ipairs(uuids) do
+        PetsService:FireServer("UnequipPet", uuid)
+        print("ClearGarden: Unequip pet " .. uuid)
+        if i < #uuids then
+            task.wait(0.6)
+        end
+    end
+    print("ClearGarden: Selesai.")
+end
+
+-- ============================================================
+-- 8. AUTO SHARK (loop, berjalan terus sampai stop)
+-- ============================================================
+local autoSharkCoroutine = nil
+local isAutoSharkRunning = false
+
+local function startAutoShark()
+    if autoSharkCoroutine then return end
+    isAutoSharkRunning = true
+    autoSharkCoroutine = coroutine.create(function()
+        while isAutoSharkRunning do
+            local timShark = MyConfig:Get("tim_shark_uuids") or {}
+            local petTarget = MyConfig:Get("pet_target_uuids") or {}
+            local petTumbal = MyConfig:Get("pet_tumbal_uuids") or {}
+            local targetMutasi = MyConfig:Get("target_mutasi") or "Normal"
+
+            print("=== AUTO SHARK RUNNING ===")
+            print("Tim Shark:", table.concat(timShark, ", "))
+            print("Pet Target:", table.concat(petTarget, ", "))
+            print("Pet Tumbal:", table.concat(petTumbal, ", "))
+            print("Target Mutasi:", targetMutasi)
+
+            task.wait(5)
+        end
+    end)
+    coroutine.resume(autoSharkCoroutine)
+end
+
+local function stopAutoShark()
+    isAutoSharkRunning = false
+    if autoSharkCoroutine then
+        autoSharkCoroutine = nil
+        print("Auto Shark dihentikan.")
+    end
+end
+
+-- ============================================================
+-- 9. TOGGLE START/STOP (ClearGarden di Start dan Stop)
+-- ============================================================
 local isRunning = MyConfig:Get("is_running") or false
 
 local toggleStartStop = ActionSection:Toggle({
@@ -294,18 +344,26 @@ local toggleStartStop = ActionSection:Toggle({
         MyConfig:Set("is_running", value)
         MyConfig:Save()
         if value then
-            print("Auto Shark DIMULAI!")
+            print("Toggle: ON")
+            -- Jalankan ClearGarden sekali (bersihkan pet yang terpasang)
+            runClearGarden()
+            -- Setelah selesai, jalankan Auto Shark
             startAutoShark()
         else
-            print("Auto Shark DIHENTIKAN!")
+            print("Toggle: OFF")
+            -- Hentikan Auto Shark terlebih dahulu
             stopAutoShark()
+            -- Kemudian bersihkan semua pet yang terpasang (termasuk hasil Auto Shark)
+            runClearGarden()
         end
     end
 })
 
+-- ============================================================
+-- 10. TOMBOL LAINNYA
+-- ============================================================
 ActionSection:Space()
 
--- Tombol refresh tumbal manual
 ActionSection:Button({
     Title = "Refresh Pet Tumbal",
     Justify = "Center",
@@ -318,7 +376,6 @@ ActionSection:Button({
 
 ActionSection:Space()
 
--- Tombol refresh semua data
 ActionSection:Button({
     Title = "Refresh Semua Data Pet",
     Justify = "Center",
@@ -377,7 +434,7 @@ ActionSection:Button({
 })
 
 -- ============================================================
--- 11. TOMBOL SAVE & LOAD CONFIG MANUAL (untuk memastikan)
+-- 11. TOMBOL SAVE & LOAD CONFIG
 -- ============================================================
 local ConfigSection = TabAutoShark:Section({ Title = "Config" })
 
@@ -398,19 +455,13 @@ ConfigSection:Button({
     Callback = function()
         MyConfig:Load()
         print("Konfigurasi dimuat!")
-        -- Refresh tampilan dropdown dengan nilai dari config
-        -- Tim Shark
         local loadedShark = MyConfig:Get("tim_shark_uuids") or {}
         dropdownTimShark:Set(loadedShark)
-        -- Pet Target
         local loadedTarget = MyConfig:Get("pet_target_uuids") or {}
         dropdownPetTarget:Set(loadedTarget)
-        -- Target Mutasi
         local loadedMut = MyConfig:Get("target_mutasi") or defaultMutation
         dropdownTargetMutasi:Set(loadedMut)
-        -- Tumbal
         updateTumbalDropdown(loadedMut)
-        -- Toggle
         local loadedRunning = MyConfig:Get("is_running") or false
         toggleStartStop:Set(loadedRunning)
         print("Semua nilai dimuat dari config!")
@@ -418,46 +469,12 @@ ConfigSection:Button({
 })
 
 -- ============================================================
--- 12. FUNGSI START/STOP (contoh)
--- ============================================================
-local autoSharkCoroutine = nil
-
-local function startAutoShark()
-    if autoSharkCoroutine then return end
-    autoSharkCoroutine = coroutine.create(function()
-        while MyConfig:Get("is_running") do
-            local timShark = MyConfig:Get("tim_shark_uuids") or {}
-            local petTarget = MyConfig:Get("pet_target_uuids") or {}
-            local petTumbal = MyConfig:Get("pet_tumbal_uuids") or {}
-            local targetMutasi = MyConfig:Get("target_mutasi") or "Normal"
-
-            print("=== AUTO SHARK RUNNING ===")
-            print("Tim Shark:", table.concat(timShark, ", "))
-            print("Pet Target:", table.concat(petTarget, ", "))
-            print("Pet Tumbal:", table.concat(petTumbal, ", "))
-            print("Target Mutasi:", targetMutasi)
-
-            task.wait(5)
-        end
-    end)
-    coroutine.resume(autoSharkCoroutine)
-end
-
-local function stopAutoShark()
-    if autoSharkCoroutine then
-        autoSharkCoroutine = nil
-        print("Auto Shark dihentikan.")
-    end
-end
-
--- ============================================================
--- 13. SIMPAN KONFIGURASI AWAL DAN TAMPILKAN
+-- 12. SIMPAN DAN TAMPILKAN
 -- ============================================================
 MyConfig:Save()
 
 print("Pria Solo HUB - Auto Shark Tab siap digunakan!")
 
--- Jalankan otomatis jika sebelumnya sedang berjalan
 if MyConfig:Get("is_running") then
     toggleStartStop:Set(true)
 end
