@@ -1,12 +1,14 @@
 -- ============================================================
 -- SCRIPT: Pria Solo HUB - Auto Shark Tab (Ukuran 400x600)
--- DataPetModule dari GitHub, LinoriaLib
+-- Menggunakan pola LinoriaLib sesuai contoh
 -- ============================================================
 
 -- ============================================================
 -- 1. LOAD DataPetModule dari GitHub
 -- ============================================================
-local DataPetModule = loadstring(game:HttpGet("https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/DataPetModule.lua"))()
+local DataPetModule = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/DataPetModule.lua"
+))()
 if not DataPetModule then error("Gagal memuat DataPetModule!") end
 
 -- ============================================================
@@ -22,7 +24,7 @@ if not Library then error("Gagal memuat LinoriaLib!") end
 -- 3. FUNGSI BANTUAN
 -- ============================================================
 
--- Ambil daftar mutasi unik dari data pet yang ada
+-- Ambil daftar mutasi unik dari data pet
 local function getMutationList()
     local mutations = {}
     local allPets = DataPetModule.getAllPets()
@@ -41,40 +43,34 @@ local function getMutationList()
     return mutations
 end
 
--- Format teks pet untuk ditampilkan
-local function formatPetText(petInfo)
+-- Format tampilan pet
+local function formatPetDisplay(pet)
     return string.format(
         "%s [%s] | Lv.%d | %.2f kg",
-        petInfo.name,
-        petInfo.mutation,
-        petInfo.level,
-        petInfo.weight
+        pet.name,
+        pet.mutation,
+        pet.level,
+        pet.weight
     )
 end
 
--- Buat opsi dropdown: list of { Text = "...", UUID = "..." }
-local function buildDropdownOptions(petList)
-    local options = {}
+-- Bangun daftar value untuk dropdown (list display string) dan mapping display->uuid
+local function buildDropdownData(petList)
+    local displayToUUID = {}
+    local values = {}
     for _, pet in ipairs(petList) do
-        table.insert(options, {
-            Text = formatPetText(pet),
-            UUID = pet.uuid
-        })
+        local display = formatPetDisplay(pet)
+        -- Tambahkan UUID untuk memastikan unik jika ada nama yang sama
+        display = display .. " | " .. tostring(pet.uuid):sub(1, 8)
+        displayToUUID[display] = pet.uuid
+        table.insert(values, display)
     end
-    if #options == 0 then
-        table.insert(options, { Text = "Tidak ada pet", UUID = "" })
+    if #values == 0 then
+        local noPet = "Tidak ada pet"
+        displayToUUID[noPet] = ""
+        table.insert(values, noPet)
     end
-    return options
-end
-
--- Ambil UUID dari teks yang dipilih (mencocokkan)
-local function getUUIDFromText(dropdownOptions, selectedText)
-    for _, opt in ipairs(dropdownOptions) do
-        if opt.Text == selectedText then
-            return opt.UUID
-        end
-    end
-    return nil
+    return values, displayToUUID
 end
 
 -- ============================================================
@@ -85,7 +81,7 @@ local Window = Library:CreateWindow({
     Center = true,
     AutoShow = true,
     TabPadding = 8,
-    Size = UDim2.new(0, 400, 0, 600)  -- ukuran 400x600
+    Size = UDim2.new(0, 400, 0, 600)
 })
 
 local TabAutoShark = Window:AddTab("Auto Shark")
@@ -93,22 +89,15 @@ local TabAutoShark = Window:AddTab("Auto Shark")
 -- ============================================================
 -- 5. DROPDOWN "Pilih Tim Shark" (favorit = true)
 -- ============================================================
-local timSharkPets = DataPetModule.findPets({ isFavorite = true })
-local timSharkOptions = buildDropdownOptions(timSharkPets)
+local sharkPets = DataPetModule.findPets({ isFavorite = true })
+local sharkValues, sharkMap = buildDropdownData(sharkPets)
 
--- Simpan opsi asli untuk referensi UUID
-local timSharkOptionsData = timSharkOptions
-
-local dropdownTimShark = TabAutoShark:AddDropdown({
-    Name = "Pilih Tim Shark",
-    Options = timSharkOptions,  -- list of {Text, UUID} atau list string?
-    Default = timSharkOptions[1] and timSharkOptions[1].Text or "Tidak ada pet",
-    Callback = function(selectedText)
-        local uuid = getUUIDFromText(timSharkOptionsData, selectedText)
-        print("Tim Shark dipilih: " .. selectedText .. " | UUID: " .. tostring(uuid))
-        -- Simpan UUID ke variabel global atau lakukan aksi
-        _G.selectedTimSharkUUID = uuid
-    end
+local dropdownTimShark = TabAutoShark:AddDropdown("TimShark", {
+    Values = sharkValues,
+    Default = sharkValues[1] or "",
+    Multi = false,   -- single select
+    Text = "Pilih Tim Shark",
+    Tooltip = "Pilih pet favorit untuk tim shark"
 })
 
 -- ============================================================
@@ -118,119 +107,150 @@ local targetPets = DataPetModule.findPets({
     isFavorite = false,
     mutation = "Normal"
 })
-local targetOptions = buildDropdownOptions(targetPets)
-local targetOptionsData = targetOptions
+local targetValues, targetMap = buildDropdownData(targetPets)
 
-local dropdownPetTarget = TabAutoShark:AddDropdown({
-    Name = "Pilih Pet Target",
-    Options = targetOptions,
-    Default = targetOptions[1] and targetOptions[1].Text or "Tidak ada pet",
-    Callback = function(selectedText)
-        local uuid = getUUIDFromText(targetOptionsData, selectedText)
-        print("Pet Target dipilih: " .. selectedText .. " | UUID: " .. tostring(uuid))
-        _G.selectedTargetUUID = uuid
-    end
+local dropdownPetTarget = TabAutoShark:AddDropdown("PetTarget", {
+    Values = targetValues,
+    Default = targetValues[1] or "",
+    Multi = false,
+    Text = "Pilih Pet Target",
+    Tooltip = "Pilih pet target (tanpa mutasi)"
 })
 
 -- ============================================================
 -- 7. DROPDOWN "Pilih Target Mutasi" (daftar semua mutasi)
 -- ============================================================
 local mutationList = getMutationList()
-local mutationOptions = {}
+local mutValues = {}
+local mutMap = {}
 for _, m in ipairs(mutationList) do
-    table.insert(mutationOptions, { Text = m, UUID = m }) -- UUID = nama mutasi
+    mutMap[m] = m
+    table.insert(mutValues, m)
 end
 
-local dropdownTargetMutasi = TabAutoShark:AddDropdown({
-    Name = "Pilih Target Mutasi",
-    Options = mutationOptions,
-    Default = mutationOptions[1] and mutationOptions[1].Text or "Normal",
-    Callback = function(selectedText)
-        print("Target Mutasi dipilih: " .. selectedText)
-        _G.selectedMutation = selectedText
-        -- Update pet tumbal sesuai mutasi
-        updateTumbalDropdown(selectedText)
-    end
+local dropdownTargetMutasi = TabAutoShark:AddDropdown("TargetMutasi", {
+    Values = mutValues,
+    Default = mutValues[1] or "Normal",
+    Multi = false,
+    Text = "Pilih Target Mutasi",
+    Tooltip = "Pilih mutasi yang diinginkan"
 })
 
 -- ============================================================
 -- 8. DROPDOWN "Pilih Pet Tumbal" (favorit = false, mutasi sesuai pilihan)
 -- ============================================================
-local tumbalOptionsData = {}
+-- Simpan mapping dan nilai untuk tumbal
+local tumbalValues = {}
+local tumbalMap = {}
 
+-- Fungsi untuk memperbarui dropdown tumbal berdasarkan mutasi terpilih
 local function updateTumbalDropdown(mutation)
     local tumbalPets = DataPetModule.findPets({
         isFavorite = false,
         mutation = mutation
     })
-    local options = buildDropdownOptions(tumbalPets)
-    tumbalOptionsData = options
-    dropdownPetTumbal:SetOptions(options)
-    dropdownPetTumbal:SetValue(options[1] and options[1].Text or "Tidak ada pet")
+    local newValues, newMap = buildDropdownData(tumbalPets)
+    tumbalValues = newValues
+    tumbalMap = newMap
+    dropdownPetTumbal:SetValues(tumbalValues)
+    dropdownPetTumbal:SetValue(tumbalValues[1] or "")
 end
 
--- Buat dropdown dengan opsi awal
-local initialMutation = mutationList[1] or "Normal"
+-- Buat dropdown tumbal dengan data awal (mutasi default)
+local initialMut = mutValues[1] or "Normal"
 local initialTumbalPets = DataPetModule.findPets({
     isFavorite = false,
-    mutation = initialMutation
+    mutation = initialMut
 })
-local initialTumbalOptions = buildDropdownOptions(initialTumbalPets)
-tumbalOptionsData = initialTumbalOptions
+local initVals, initMap = buildDropdownData(initialTumbalPets)
+tumbalValues = initVals
+tumbalMap = initMap
 
-local dropdownPetTumbal = TabAutoShark:AddDropdown({
-    Name = "Pilih Pet Tumbal",
-    Options = initialTumbalOptions,
-    Default = initialTumbalOptions[1] and initialTumbalOptions[1].Text or "Tidak ada pet",
-    Callback = function(selectedText)
-        local uuid = getUUIDFromText(tumbalOptionsData, selectedText)
-        print("Pet Tumbal dipilih: " .. selectedText .. " | UUID: " .. tostring(uuid))
-        _G.selectedTumbalUUID = uuid
+local dropdownPetTumbal = TabAutoShark:AddDropdown("PetTumbal", {
+    Values = tumbalValues,
+    Default = tumbalValues[1] or "",
+    Multi = false,
+    Text = "Pilih Pet Tumbal",
+    Tooltip = "Pilih pet tumbal sesuai mutasi yang dipilih"
+})
+
+-- ============================================================
+-- 9. EVENT HANDLER: update tumbal saat mutasi berubah
+-- ============================================================
+-- Karena Linoria tidak menyediakan callback langsung untuk dropdown,
+-- kita bisa menggunakan sinyal atau meng-override metode Value.
+-- Cara sederhana: tambahkan tombol refresh atau gunakan task.wait untuk polling.
+-- Tapi lebih baik kita pasang koneksi ke peristiwa perubahan.
+-- Alternatif: kita buat tombol "Update Tumbal" manual.
+-- Saya akan tambahkan tombol "Refresh Tumbal" agar user bisa update manual.
+
+TabAutoShark:AddButton({
+    Name = "Refresh Pet Tumbal",
+    Callback = function()
+        local selectedMut = dropdownTargetMutasi:GetValue()
+        updateTumbalDropdown(selectedMut)
+        print("Pet tumbal diperbarui sesuai mutasi: " .. selectedMut)
     end
 })
 
 -- ============================================================
--- 9. TOMBOL REFRESH & DEBUG
+-- 10. TOMBOL DEBUG / TAMPILKAN UUID
 -- ============================================================
+local function getSelectedUUID(dropdownObj, map)
+    local selectedText = dropdownObj:GetValue()
+    return map[selectedText] or ""
+end
+
 TabAutoShark:AddButton({
     Name = "Tampilkan UUID Terpilih",
     Callback = function()
+        local sharkUUID = getSelectedUUID(dropdownTimShark, sharkMap)
+        local targetUUID = getSelectedUUID(dropdownPetTarget, targetMap)
+        local tumbalUUID = getSelectedUUID(dropdownPetTumbal, tumbalMap)
+        local mutasi = dropdownTargetMutasi:GetValue()
+
         print("=== UUID Terpilih ===")
-        print("Tim Shark   : " .. tostring(_G.selectedTimSharkUUID))
-        print("Pet Target  : " .. tostring(_G.selectedTargetUUID))
-        print("Pet Tumbal  : " .. tostring(_G.selectedTumbalUUID))
-        print("Target Mutasi : " .. tostring(_G.selectedMutation))
+        print("Tim Shark   : " .. sharkUUID)
+        print("Pet Target  : " .. targetUUID)
+        print("Pet Tumbal  : " .. tumbalUUID)
+        print("Target Mutasi : " .. mutasi)
     end
 })
 
 TabAutoShark:AddButton({
-    Name = "Refresh Data Pet",
+    Name = "Refresh Semua Data Pet",
     Callback = function()
         -- Refresh Tim Shark
         local newShark = DataPetModule.findPets({ isFavorite = true })
-        local newOpts = buildDropdownOptions(newShark)
-        timSharkOptionsData = newOpts
-        dropdownTimShark:SetOptions(newOpts)
-        dropdownTimShark:SetValue(newOpts[1] and newOpts[1].Text or "Tidak ada pet")
+        local newVals, newMap = buildDropdownData(newShark)
+        sharkValues = newVals
+        sharkMap = newMap
+        dropdownTimShark:SetValues(sharkValues)
+        dropdownTimShark:SetValue(sharkValues[1] or "")
 
         -- Refresh Pet Target
         local newTarget = DataPetModule.findPets({ isFavorite = false, mutation = "Normal" })
-        local newTargetOpts = buildDropdownOptions(newTarget)
-        targetOptionsData = newTargetOpts
-        dropdownPetTarget:SetOptions(newTargetOpts)
-        dropdownPetTarget:SetValue(newTargetOpts[1] and newTargetOpts[1].Text or "Tidak ada pet")
+        local newTVals, newTMap = buildDropdownData(newTarget)
+        targetValues = newTVals
+        targetMap = newTMap
+        dropdownPetTarget:SetValues(targetValues)
+        dropdownPetTarget:SetValue(targetValues[1] or "")
 
         -- Refresh Target Mutasi
-        local newMutations = getMutationList()
-        local newMutOpts = {}
-        for _, m in ipairs(newMutations) do
-            table.insert(newMutOpts, { Text = m, UUID = m })
+        local newMuts = getMutationList()
+        local newMutVals = {}
+        local newMutMap = {}
+        for _, m in ipairs(newMuts) do
+            newMutMap[m] = m
+            table.insert(newMutVals, m)
         end
-        dropdownTargetMutasi:SetOptions(newMutOpts)
-        dropdownTargetMutasi:SetValue(newMutOpts[1] and newMutOpts[1].Text or "Normal")
+        mutValues = newMutVals
+        mutMap = newMutMap
+        dropdownTargetMutasi:SetValues(mutValues)
+        dropdownTargetMutasi:SetValue(mutValues[1] or "Normal")
 
-        -- Refresh Pet Tumbal (sesuai mutasi yang dipilih)
-        local currentMut = dropdownTargetMutasi:GetValue() or "Normal"
+        -- Refresh Tumbal sesuai mutasi terpilih
+        local currentMut = dropdownTargetMutasi:GetValue()
         updateTumbalDropdown(currentMut)
 
         print("Semua data pet di-refresh!")
@@ -238,7 +258,7 @@ TabAutoShark:AddButton({
 })
 
 -- ============================================================
--- 10. SETUP THEME & SAVE
+-- 11. SETUP THEME & SAVE
 -- ============================================================
 local UISettingsTab = Window:AddTab("UI Settings")
 
@@ -268,7 +288,7 @@ ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 
 -- ============================================================
--- 11. INISIALISASI AWAL
+-- 12. INISIALISASI AWAL
 -- ============================================================
 updateTumbalDropdown(dropdownTargetMutasi:GetValue() or "Normal")
 print("Pria Solo HUB - Auto Shark Tab siap digunakan!")
