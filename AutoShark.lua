@@ -1,26 +1,18 @@
 -- ============================================================
--- SCRIPT: Pria Solo HUB - Auto Shark Tab (WindUI + ConfigManager)
--- Logika FINAL: satu cycle = equip target+tumbal sekali, tunggu notifikasi,
--- lalu unequip target+tumbal, equip shark, dan cycle berikutnya dimulai
--- dari awal (tunggu mimic ready lagi)
+-- SCRIPT FINAL: Pria Solo HUB - Auto Shark Tab (Dengan Validasi)
 -- ============================================================
 
--- ============================================================
--- 1. LOAD WindUI
--- ============================================================
+-- LOAD LIBRARIES
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 if not WindUI then error("Gagal memuat WindUI!") end
 
--- ============================================================
--- 2. LOAD DataPetModule
--- ============================================================
 local DataPetModule = loadstring(game:HttpGet(
     "https://raw.githubusercontent.com/okegasscript/PriaSoloV1/refs/heads/main/DataPetModule.lua"
 ))()
 if not DataPetModule then error("Gagal memuat DataPetModule!") end
 
 -- ============================================================
--- 3. FUNGSI BANTUAN & AKSES DATA SERVICE
+-- FUNGSI DATA SERVICE
 -- ============================================================
 local function getDataService()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -59,7 +51,7 @@ local function getEquippedPetsUUIDs()
 end
 
 -- ============================================================
--- 4. FUNGSI LAINNYA (mutasi, format, dropdown)
+-- FUNGSI MUTASI, FORMAT, DROPDOWN
 -- ============================================================
 local function getMutationList()
     local mutations = {}
@@ -104,7 +96,7 @@ local function buildDropdownOptions(petList)
 end
 
 -- ============================================================
--- 5. BUAT WINDOW DAN CONFIG MANAGER
+-- WINDOW & CONFIG
 -- ============================================================
 local Window = WindUI:CreateWindow({
     Title = "Pria Solo HUB",
@@ -119,7 +111,7 @@ local MyConfig = Window.ConfigManager:Config("AutoSharkConfig")
 MyConfig:Load()
 
 -- ============================================================
--- 6. TAB AUTO SHARK
+-- TAB AUTO SHARK
 -- ============================================================
 local TabAutoShark = Window:Tab({
     Title = "Auto Shark",
@@ -128,7 +120,7 @@ local TabAutoShark = Window:Tab({
 
 local SettingsSection = TabAutoShark:Section({ Title = "Auto Shark Settings" })
 
--- ========== DROPDOWN 1: Tim Shark ==========
+-- DROPDOWN 1: Tim Shark
 local sharkPets = DataPetModule.findPets({ isFavorite = true })
 local sharkOptions = buildDropdownOptions(sharkPets)
 local defaultSharkUUIDs = MyConfig:Get("tim_shark_uuids") or {}
@@ -159,7 +151,7 @@ local dropdownTimShark = SettingsSection:Dropdown({
 
 SettingsSection:Space()
 
--- ========== DROPDOWN 2: Pet Target ==========
+-- DROPDOWN 2: Pet Target
 local targetPets = DataPetModule.findPets({
     isFavorite = false,
     mutation = "Normal"
@@ -193,7 +185,7 @@ local dropdownPetTarget = SettingsSection:Dropdown({
 
 SettingsSection:Space()
 
--- ========== DROPDOWN 3: Target Mutasi ==========
+-- DROPDOWN 3: Target Mutasi
 local mutationList = getMutationList()
 local mutOptions = {}
 for _, m in ipairs(mutationList) do
@@ -232,7 +224,7 @@ local dropdownTargetMutasi = SettingsSection:Dropdown({
 
 SettingsSection:Space()
 
--- ========== DROPDOWN 4: Pet Tumbal ==========
+-- DROPDOWN 4: Pet Tumbal
 local tumbalOptions = {}
 local tumbalDropdownObject = nil
 
@@ -325,15 +317,23 @@ local dropdownPetTumbal = SettingsSection:Dropdown({
 tumbalDropdownObject = dropdownPetTumbal
 
 -- ============================================================
--- 7. SECTION TOMBOL AKSI
+-- SECTION AKSI
 -- ============================================================
 local ActionSection = TabAutoShark:Section({ Title = "Actions" })
 
 -- ============================================================
--- 8. FUNGSI EQUIP/UNEQUIP VIA REMOTE
+-- REMOTE EVENTS (DENGAN VALIDASI)
 -- ============================================================
-local PetsService = game:GetService("ReplicatedStorage"):FindFirstChild("GameEvents"):FindFirstChild("PetsService")
-local NotificationEvent = game:GetService("ReplicatedStorage"):FindFirstChild("GameEvents"):FindFirstChild("Notification")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GameEvents = ReplicatedStorage:FindFirstChild("GameEvents")
+if not GameEvents then error("GameEvents tidak ditemukan!") end
+
+local PetsService = GameEvents:FindFirstChild("PetsService")
+if not PetsService then error("PetsService tidak ditemukan!") end
+
+local NotificationEvent = GameEvents:FindFirstChild("Notification")
+if not NotificationEvent then error("Notification tidak ditemukan!") end
+
 local Player = game.Players.LocalPlayer
 
 local function getEquipCFrame()
@@ -358,7 +358,7 @@ local function unequipPet(uuid)
 end
 
 -- ============================================================
--- 9. FUNGSI CLEAR GARDEN
+-- CLEAR GARDEN
 -- ============================================================
 local function runClearGarden()
     print("🧹 ClearGarden: Memulai...")
@@ -376,7 +376,7 @@ local function runClearGarden()
 end
 
 -- ============================================================
--- 10. FUNGSI PENGECEKAN MUTASI TARGET
+-- PENGECEKAN MUTASI
 -- ============================================================
 local function checkTargetMutation(uuid, targetMutation)
     print("🔍 Cek mutasi target:", uuid, "target:", targetMutation)
@@ -394,7 +394,7 @@ local function checkTargetMutation(uuid, targetMutation)
 end
 
 -- ============================================================
--- 11. FUNGSI COOLDOWN
+-- FUNGSI COOLDOWN
 -- ============================================================
 local function getCooldownTime(uuid)
     local raw = DataPetModule.getCooldown(uuid)
@@ -422,7 +422,7 @@ local function getCooldownPassive(uuid)
 end
 
 -- ============================================================
--- 12. DETEKSI MIMIC & SHARK
+-- DETEKSI MIMIC & SHARK
 -- ============================================================
 local function getMimicUUID(timSharkUUIDs)
     local equipped = getEquippedPetsUUIDs()
@@ -457,7 +457,7 @@ local function getSharkUUID(timSharkUUIDs, mimicUUID)
 end
 
 -- ============================================================
--- 13. NORMALISASI UUID
+-- NORMALISASI UUID
 -- ============================================================
 local function normalizeUUIDList(list)
     if type(list) ~= "table" then return {} end
@@ -473,7 +473,7 @@ local function normalizeUUIDList(list)
 end
 
 -- ============================================================
--- 14. LOGIKA AUTO SHARK FINAL
+-- LOGIKA AUTO SHARK
 -- ============================================================
 local autoSharkCoroutine = nil
 local isAutoSharkRunning = false
@@ -489,11 +489,10 @@ local function setupNotificationListener()
     notificationConnection = NotificationEvent.OnClientEvent:Connect(function(message)
         if type(message) ~= "string" then return end
         print("📢 Notifikasi diterima:", message)
-        -- Hanya respon jika mengandung kata "failed" atau "spat its"
         if message:find("failed to transfer") then
             mutationResult = "failed"
             print("❌ Mutasi GAGAL")
-        elseif message:find("spat its") then
+        elseif message:find("spat its") and message:find("mutation onto") then
             mutationResult = "success"
             print("✅ Mutasi BERHASIL")
         end
@@ -558,57 +557,68 @@ local function autoSharkLoop()
     
     setupNotificationListener()
     
-    -- Siklus utama: setiap iterasi = satu cycle
-    while isAutoSharkRunning and #targetQueue > 0 do
-        -- 1. Equip tim shark (mimic + shark)
-        print("🦈 Equip tim shark untuk cycle baru...")
-        for _, uuid in ipairs(timSharkUUIDs) do
-            equipPet(uuid)
-            task.wait(0.3)
+    -- Equip tim shark
+    print("🦈 Equip tim shark...")
+    for _, uuid in ipairs(timSharkUUIDs) do
+        equipPet(uuid)
+        task.wait(0.3)
+    end
+    task.wait(1.5)
+    
+    -- Tunggu mimic ready (cooldown 0)
+    print("⏳ Menunggu mimic ready...")
+    local mimic = nil
+    local cooldownTime = 0
+    repeat
+        task.wait(0.5)
+        mimic = getMimicUUID(timSharkUUIDs)
+        if mimic then
+            cooldownTime = getCooldownTime(mimic)
+            print("⏳ Cooldown mimic:", cooldownTime, "Passive:", getCooldownPassive(mimic))
+        else
+            print("⏳ Mimic belum terdeteksi, mungkin belum ter-equip.")
         end
-        task.wait(1.5)
-        
-        -- 2. Tunggu mimic ready (cooldown 0)
-        print("⏳ Menunggu mimic ready...")
-        local mimic = nil
-        local cooldownTime = 0
-        repeat
-            task.wait(0.5)
-            mimic = getMimicUUID(timSharkUUIDs)
-            if mimic then
-                cooldownTime = getCooldownTime(mimic)
-                print("⏳ Cooldown mimic:", cooldownTime, "Passive:", getCooldownPassive(mimic))
-            else
-                print("⏳ Mimic belum terdeteksi, mungkin belum ter-equip.")
-            end
-        until (mimic and cooldownTime == 0) or not isAutoSharkRunning
-        if not isAutoSharkRunning then break
-        print("✅ Mimic siap (cooldown 0).")
-        
-        -- 3. Jeda 0.6 detik
-        print("⏳ Jeda 0.6 detik setelah mimic ready...")
-        task.wait(0.6)
-        
-        -- 4. Cek mimic masih ada
+    until (mimic and cooldownTime == 0) or not isAutoSharkRunning
+    if not isAutoSharkRunning then 
+        cleanupNotificationListener()
+        return 
+    end
+    print("✅ Mimic siap (cooldown 0).")
+    
+    -- Jeda 0.6 detik
+    print("⏳ Jeda 0.6 detik setelah mimic ready...")
+    task.wait(0.6)
+    
+    mimic = getMimicUUID(timSharkUUIDs)
+    if not mimic then
+        print("❌ Mimic hilang setelah jeda, hentikan.")
+        cleanupNotificationListener()
+        return
+    end
+    
+    -- Ambil target pertama
+    currentTarget = table.remove(targetQueue, 1)
+    if not currentTarget then
+        print("❌ Tidak ada target.")
+        cleanupNotificationListener()
+        return
+    end
+    currentTumbal = getNextTumbal()
+    if not currentTumbal then
+        print("❌ Tidak ada tumbal.")
+        cleanupNotificationListener()
+        return
+    end
+    
+    -- Siklus utama
+    while isAutoSharkRunning and #targetQueue >= 0 do
         mimic = getMimicUUID(timSharkUUIDs)
         if not mimic then
-            print("❌ Mimic hilang setelah jeda, hentikan siklus.")
+            print("❌ Mimic hilang, hentikan siklus.")
             break
         end
         
-        -- 5. Ambil target dan tumbal untuk cycle ini
-        currentTarget = table.remove(targetQueue, 1)
-        if not currentTarget then
-            print("❌ Tidak ada target.")
-            break
-        end
-        currentTumbal = getNextTumbal()
-        if not currentTumbal then
-            print("❌ Tidak ada tumbal.")
-            break
-        end
-        
-        -- 6. Unequip shark
+        -- Step 1: Unequip shark
         local shark = getSharkUUID(timSharkUUIDs, mimic)
         if shark then
             unequipPet(shark)
@@ -618,13 +628,16 @@ local function autoSharkLoop()
         end
         task.wait(0.3)
         
-        -- 7. Equip target & tumbal (hanya sekali per cycle)
+        -- Step 2: Equip target & tumbal (hanya 1x per cycle)
         print("🎯 Equip target & tumbal...")
         equipPet(currentTarget)
         equipPet(currentTumbal)
         task.wait(0.5)
         
-        -- 8. Tunggu mimic aktif (cooldown > 0)
+        -- Reset flag notifikasi
+        mutationResult = nil
+        
+        -- Tunggu mimic aktif (cooldown > 0)
         print("⏳ Menunggu mimic mulai aktif...")
         local waitCount = 0
         while isAutoSharkRunning and waitCount < 30 do
@@ -636,43 +649,57 @@ local function autoSharkLoop()
             task.wait(0.1)
             waitCount = waitCount + 1
         end
-        if not isAutoSharkRunning then break
+        if not isAutoSharkRunning then break end
         
-        -- 9. Reset notifikasi
-        mutationResult = nil
-        
-        -- 10. Tunggu notifikasi (failed atau spat its) dengan timeout 15 detik
-        local targetMut = MyConfig:Get("target_mutasi") or "Blossoming"
-        print("⏳ Menunggu notifikasi mutasi... (timeout 15 detik)")
+        -- Tunggu notifikasi "failed" atau "spat its" (timeout 20 detik)
+        print("⏳ Menunggu notifikasi mutasi... (timeout 20 detik)")
         local startWait = tick()
-        while isAutoSharkRunning and mutationResult == nil and (tick() - startWait) < 15 do
+        while isAutoSharkRunning and mutationResult == nil and (tick() - startWait) < 20 do
             task.wait(0.2)
         end
         
+        -- Jika timeout, anggap gagal
         if mutationResult == nil then
-            print("⏰ Timeout 15 detik tanpa notifikasi, anggap GAGAL.")
+            print("⏰ Timeout 20 detik tanpa notifikasi, anggap GAGAL.")
             mutationResult = "failed"
         end
         
-        -- 11. Jeda 1 detik, lalu unequip target & tumbal (karena notifikasi sudah muncul)
+        -- Step 3: Unequip target & tumbal (1 detik jeda)
         print("⏳ Jeda 1 detik sebelum unequip target & tumbal...")
         task.wait(1)
         unequipPet(currentTarget)
         unequipPet(currentTumbal)
-        print("❌ Unequip target & tumbal.")
+        print("❌ Unequip target & tumbal setelah notifikasi.")
         
-        -- 12. Proses hasil mutasi
+        -- Step 4: Proses hasil mutasi
+        local targetMut = MyConfig:Get("target_mutasi") or "Blossoming"
         local success = (mutationResult == "success")
         if success then
             print("✅ Target", currentTarget, "BERHASIL mendapatkan mutasi", targetMut)
-            -- Target selesai, lanjut ke target berikutnya di cycle selanjutnya
+            if #targetQueue > 0 then
+                currentTarget = table.remove(targetQueue, 1)
+                currentTumbal = getNextTumbal()  -- Tumbal diganti untuk cycle berikutnya
+                if not currentTumbal then
+                    print("❌ Tidak ada tumbal tersisa.")
+                    break
+                end
+            else
+                print("🎉 Semua target selesai!")
+                currentTarget = nil
+                currentTumbal = nil
+                break
+            end
         else
             print("❌ Target", currentTarget, "GAGAL mendapatkan mutasi", targetMut, "akan diulang.")
-            -- Kembalikan target ke antrian (diulang di cycle berikutnya)
-            table.insert(targetQueue, 1, currentTarget)
+            -- currentTarget tetap, tetapi tumbal harus diganti untuk cycle berikutnya
+            currentTumbal = getNextTumbal()
+            if not currentTumbal then
+                print("❌ Tidak ada tumbal tersisa.")
+                break
+            end
         end
         
-        -- 13. Jeda 1 detik, lalu equip shark kembali
+        -- Step 5: Jeda 1 detik, lalu equip shark kembali
         print("⏳ Jeda 1 detik sebelum equip shark kembali...")
         task.wait(1)
         local timShark = MyConfig:Get("tim_shark_uuids") or {}
@@ -685,9 +712,20 @@ local function autoSharkLoop()
         end
         print("🦈 Shark di-equip kembali.")
         
-        -- 14. Jeda sebentar sebelum cycle berikutnya (agar mimic sempat cooldown)
-        print("⏳ Tunggu 0.5 detik sebelum cycle berikutnya...")
-        task.wait(0.5)
+        -- Step 6: Tunggu mimic ready lagi (cooldown 0) untuk cycle berikutnya
+        print("⏳ Menunggu mimic ready untuk cycle berikutnya...")
+        repeat
+            task.wait(0.5)
+            mimic = getMimicUUID(timSharkUUIDs)
+            if mimic then
+                cooldownTime = getCooldownTime(mimic)
+                print("⏳ Cooldown mimic:", cooldownTime)
+            else
+                print("⏳ Mimic belum terdeteksi.")
+            end
+        until (mimic and cooldownTime == 0) or not isAutoSharkRunning
+        if not isAutoSharkRunning then break
+        print("✅ Mimic siap, cycle berikutnya dimulai.")
     end
     
     print("🏁 Auto Shark loop selesai.")
@@ -696,7 +734,7 @@ local function autoSharkLoop()
 end
 
 -- ============================================================
--- 15. START / STOP
+-- START / STOP
 -- ============================================================
 local function startAutoShark()
     if autoSharkCoroutine then return end
@@ -718,7 +756,7 @@ local function stopAutoShark()
 end
 
 -- ============================================================
--- 16. TOGGLE START/STOP
+-- TOGGLE
 -- ============================================================
 local isRunning = MyConfig:Get("is_running") or false
 
@@ -740,7 +778,7 @@ local toggleStartStop = ActionSection:Toggle({
 })
 
 -- ============================================================
--- 17. TOMBOL LAINNYA
+-- TOMBOL TAMBAHAN
 -- ============================================================
 ActionSection:Space()
 
@@ -809,7 +847,7 @@ ActionSection:Button({
 })
 
 -- ============================================================
--- 18. TOMBOL SAVE & LOAD CONFIG
+-- SAVE & LOAD
 -- ============================================================
 local ConfigSection = TabAutoShark:Section({ Title = "Config" })
 
@@ -844,7 +882,7 @@ ConfigSection:Button({
 })
 
 -- ============================================================
--- 19. SIMPAN DAN TAMPILKAN
+-- SAVE & SHOW
 -- ============================================================
 MyConfig:Save()
 
