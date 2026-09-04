@@ -1,7 +1,6 @@
 -- ============================================================
--- SCRIPT: Pria Solo HUB - Auto Shark Tab
--- Menggunakan DataPetModule dari GitHub & LinoriaLib
--- Ukuran Window: 400x600
+-- SCRIPT: Pria Solo HUB - Auto Shark Tab (Ukuran 400x600)
+-- Tampilan pet dipersingkat agar tidak overflow
 -- ============================================================
 
 -- ============================================================
@@ -44,14 +43,13 @@ local function getMutationList()
     return mutations
 end
 
--- Format tampilan pet
+-- Format tampilan pet yang lebih pendek (tanpa berat dan UUID)
 local function formatPetDisplay(pet)
     return string.format(
-        "%s [%s] | Lv.%d | %.2f kg",
+        "%s [%s] Lv.%d",
         pet.name,
         pet.mutation,
-        pet.level,
-        pet.weight
+        pet.level
     )
 end
 
@@ -59,10 +57,18 @@ end
 local function buildDropdownData(petList)
     local displayToUUID = {}
     local values = {}
+    -- Untuk menghindari duplikat nama, tambahkan indeks unik jika perlu
+    local nameCount = {}
     for _, pet in ipairs(petList) do
-        local display = formatPetDisplay(pet)
-        -- Tambahkan UUID singkat untuk memastikan unik
-        display = display .. " | " .. tostring(pet.uuid):sub(1, 8)
+        local baseDisplay = formatPetDisplay(pet)
+        local display = baseDisplay
+        -- Jika ada nama yang sama, tambahkan UUID singkat untuk membedakan
+        if nameCount[baseDisplay] then
+            nameCount[baseDisplay] = nameCount[baseDisplay] + 1
+            display = display .. " (#" .. nameCount[baseDisplay] .. ")"
+        else
+            nameCount[baseDisplay] = 1
+        end
         displayToUUID[display] = pet.uuid
         table.insert(values, display)
     end
@@ -150,11 +156,9 @@ local dropdownTargetMutasi = AutoSharkGroup:AddDropdown("TargetMutasi", {
 -- ============================================================
 -- 9. DROPDOWN "Pilih Pet Tumbal" (favorit = false, mutasi sesuai pilihan)
 -- ============================================================
--- Simpan mapping dan nilai untuk tumbal
 local tumbalValues = {}
 local tumbalMap = {}
 
--- Fungsi untuk memperbarui dropdown tumbal berdasarkan mutasi terpilih
 local function updateTumbalDropdown(mutation)
     local tumbalPets = DataPetModule.findPets({
         isFavorite = false,
@@ -167,7 +171,6 @@ local function updateTumbalDropdown(mutation)
     dropdownPetTumbal:SetValue(tumbalValues[1] or "")
 end
 
--- Buat dropdown tumbal dengan data awal (mutasi default)
 local initialMut = mutValues[1] or "Normal"
 local initialTumbalPets = DataPetModule.findPets({
     isFavorite = false,
@@ -189,7 +192,6 @@ local dropdownPetTumbal = AutoSharkGroup:AddDropdown("PetTumbal", {
 -- 10. TOMBOL DI ACTION GROUP
 -- ============================================================
 
--- Tombol refresh tumbal (karena tidak ada event otomatis)
 ActionGroup:AddButton({
     Name = "Refresh Pet Tumbal",
     Callback = function()
@@ -199,7 +201,6 @@ ActionGroup:AddButton({
     end
 })
 
--- Tombol tampilkan UUID terpilih
 local function getSelectedUUID(dropdownObj, map)
     local selectedText = dropdownObj:GetValue()
     return map[selectedText] or ""
@@ -221,7 +222,6 @@ ActionGroup:AddButton({
     end
 })
 
--- Tombol refresh semua data
 ActionGroup:AddButton({
     Name = "Refresh Semua Data Pet",
     Callback = function()
@@ -254,7 +254,7 @@ ActionGroup:AddButton({
         dropdownTargetMutasi:SetValues(mutValues)
         dropdownTargetMutasi:SetValue(mutValues[1] or "Normal")
 
-        -- Refresh Tumbal sesuai mutasi terpilih
+        -- Refresh Tumbal
         local currentMut = dropdownTargetMutasi:GetValue()
         updateTumbalDropdown(currentMut)
 
@@ -263,7 +263,7 @@ ActionGroup:AddButton({
 })
 
 -- ============================================================
--- 11. SETUP THEME & SAVE DI UI SETTINGS
+-- 11. SETUP THEME & SAVE
 -- ============================================================
 UISettingsGroup:AddButton({
     Name = "Theme Manager",
