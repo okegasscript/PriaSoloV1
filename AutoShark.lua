@@ -77,7 +77,7 @@ local Window = WindUI:CreateWindow({
     Title = "Pria Solo HUB",
     Size = UDim2.new(0, 400, 0, 600),
     Center = true,
-    AutoShow = true,
+    AutoShow = true,  -- AutoShow sudah true, jadi window otomatis muncul
     Draggable = true,
 })
 
@@ -273,8 +273,10 @@ ActionSection:Button({
 })
 
 -- ============================================================
--- 11. TAMPILKAN WINDOW
+-- 11. WINDOW OTOMATIS TAMPIL (AutoShow = true)
 -- ============================================================
-Window:Show()
+-- Tidak perlu memanggil Window:Show() karena AutoShow sudah true
+-- Jika ingin dipanggil manual, gunakan Window:Open() bukan Show()
+-- Window:Open() -- opsional jika AutoShow false
 
 print("Pria Solo HUB - Auto Shark Tab siap digunakan dengan WindUI!")
