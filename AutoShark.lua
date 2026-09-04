@@ -57,12 +57,10 @@ end
 local function buildDropdownData(petList)
     local displayToUUID = {}
     local values = {}
-    -- Untuk menghindari duplikat nama, tambahkan indeks unik jika perlu
     local nameCount = {}
     for _, pet in ipairs(petList) do
         local baseDisplay = formatPetDisplay(pet)
         local display = baseDisplay
-        -- Jika ada nama yang sama, tambahkan UUID singkat untuk membedakan
         if nameCount[baseDisplay] then
             nameCount[baseDisplay] = nameCount[baseDisplay] + 1
             display = display .. " (#" .. nameCount[baseDisplay] .. ")"
@@ -192,6 +190,13 @@ local dropdownPetTumbal = AutoSharkGroup:AddDropdown("PetTumbal", {
 -- 10. TOMBOL DI ACTION GROUP
 -- ============================================================
 
+-- Fungsi untuk mendapatkan UUID dari dropdown
+local function getSelectedUUID(dropdownObj, map)
+    local selectedText = dropdownObj:GetValue()
+    return map[selectedText] or ""
+end
+
+-- Tombol Refresh Pet Tumbal
 ActionGroup:AddButton({
     Name = "Refresh Pet Tumbal",
     Callback = function()
@@ -201,11 +206,7 @@ ActionGroup:AddButton({
     end
 })
 
-local function getSelectedUUID(dropdownObj, map)
-    local selectedText = dropdownObj:GetValue()
-    return map[selectedText] or ""
-end
-
+-- Tombol Tampilkan UUID Terpilih
 ActionGroup:AddButton({
     Name = "Tampilkan UUID Terpilih",
     Callback = function()
@@ -222,6 +223,7 @@ ActionGroup:AddButton({
     end
 })
 
+-- Tombol Refresh Semua Data Pet
 ActionGroup:AddButton({
     Name = "Refresh Semua Data Pet",
     Callback = function()
@@ -263,7 +265,76 @@ ActionGroup:AddButton({
 })
 
 -- ============================================================
--- 11. SETUP THEME & SAVE
+-- 11. TOMBOL START / STOP AUTO SHARK
+-- ============================================================
+local isRunning = false
+local autoSharkLoop = nil
+
+-- Fungsi utama auto shark (contoh, sesuaikan dengan logika game)
+local function startAutoShark()
+    local sharkUUID = getSelectedUUID(dropdownTimShark, sharkMap)
+    local targetUUID = getSelectedUUID(dropdownPetTarget, targetMap)
+    local tumbalUUID = getSelectedUUID(dropdownPetTumbal, tumbalMap)
+    local targetMutasi = dropdownTargetMutasi:GetValue()
+
+    if sharkUUID == "" or targetUUID == "" or tumbalUUID == "" then
+        print("Error: Pastikan semua pet sudah dipilih!")
+        return
+    end
+
+    print("=== Memulai Auto Shark ===")
+    print("Tim Shark UUID   : " .. sharkUUID)
+    print("Target UUID      : " .. targetUUID)
+    print("Tumbal UUID      : " .. tumbalUUID)
+    print("Target Mutasi    : " .. targetMutasi)
+
+    -- Contoh loop sederhana (ganti dengan logika auto shark yang sebenarnya)
+    isRunning = true
+    autoSharkLoop = game:GetService("RunService").Heartbeat:Connect(function()
+        if not isRunning then return end
+        -- Di sini Anda bisa menambahkan logika untuk melakukan auto shark
+        -- Misalnya: menggunakan pet UUID untuk melakukan aksi di game
+        -- Contoh: print("Auto Shark berjalan...")
+    end)
+
+    print("Auto Shark dimulai!")
+end
+
+local function stopAutoShark()
+    if autoSharkLoop then
+        autoSharkLoop:Disconnect()
+        autoSharkLoop = nil
+    end
+    isRunning = false
+    print("Auto Shark dihentikan.")
+end
+
+-- Tombol Start
+ActionGroup:AddButton({
+    Name = "Start Auto Shark",
+    Callback = function()
+        if isRunning then
+            print("Auto Shark sudah berjalan!")
+            return
+        end
+        startAutoShark()
+    end
+})
+
+-- Tombol Stop
+ActionGroup:AddButton({
+    Name = "Stop Auto Shark",
+    Callback = function()
+        if not isRunning then
+            print("Auto Shark tidak sedang berjalan.")
+            return
+        end
+        stopAutoShark()
+    end
+})
+
+-- ============================================================
+-- 12. SETUP THEME & SAVE
 -- ============================================================
 UISettingsGroup:AddButton({
     Name = "Theme Manager",
@@ -291,7 +362,7 @@ ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 
 -- ============================================================
--- 12. INISIALISASI AWAL
+-- 13. INISIALISASI AWAL
 -- ============================================================
 updateTumbalDropdown(dropdownTargetMutasi:GetValue() or "Normal")
 print("Pria Solo HUB - Auto Shark Tab siap digunakan!")
