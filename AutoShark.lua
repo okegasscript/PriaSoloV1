@@ -36,6 +36,56 @@ local DataPetModule = loadstring(game:HttpGet(
 if not DataPetModule then error("Gagal memuat DataPetModule!") end
 
 -- ============================================================
+-- 2.1 DISCORD WEBHOOK
+-- ============================================================
+local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1513620114975490058/b6VnqOUomMeXuMKdrfKkJrSfOvSh_p98YcwNGEu6NBe6fwi9qvzbKEN8JV-COEbH0Gx_"
+local HttpService = game:GetService("HttpService")
+
+-- Ambil fungsi request yang tersedia di executor (beda-beda tiap executor)
+local httpRequest = (syn and syn.request) or (http and http.request) or http_request or request
+
+local function sendDiscordWebhook(title, description, color)
+    if not httpRequest then
+        warn("Fungsi request/http_request tidak ditemukan di executor ini, notifikasi Discord tidak terkirim.")
+        return
+    end
+    color = color or 3066993 -- hijau
+
+    local payload = {
+        embeds = { {
+            title = title,
+            description = description,
+            color = color,
+        } }
+    }
+
+    task.spawn(function()
+        local ok, result = pcall(function()
+            return httpRequest({
+                Url = DISCORD_WEBHOOK_URL,
+                Method = "POST",
+                Headers = { ["Content-Type"] = "application/json" },
+                Body = HttpService:JSONEncode(payload),
+            })
+        end)
+        if not ok then
+            warn("Gagal mengirim webhook Discord:", result)
+        end
+    end)
+end
+
+-- Cari info lengkap sebuah pet (name, mutation, level, weight) dari uuid-nya
+local function getPetInfoByUUID(uuid)
+    local allPets = DataPetModule.findPets({})
+    for _, pet in ipairs(allPets) do
+        if pet.uuid == uuid then
+            return pet
+        end
+    end
+    return nil
+end
+
+-- ============================================================
 -- 3. FUNGSI BANTUAN
 -- ============================================================
 local function getDataService()
@@ -96,6 +146,14 @@ local function formatPetDisplay(pet)
     local weightStr = string.format("%.2f", pet.weight or 0)
     weightStr = weightStr:gsub("%.", ",")
     return string.format("%s %s %skg lv%d", pet.mutation, pet.name, weightStr, pet.level)
+end
+
+local function getPetLabelForWebhook(uuid)
+    local pet = getPetInfoByUUID(uuid)
+    if pet then
+        return formatPetDisplay(pet)
+    end
+    return uuid
 end
 
 local function buildDropdownOptions(petList)
@@ -746,6 +804,19 @@ local function autoSharkLoop()
         local success = (mutationResult == "success")
         if success then
             print("Target", currentTarget, "BERHASIL mendapatkan mutasi", targetMut)
+
+            local finishedLabel = getPetLabelForWebhook(currentTarget)
+            local sisaTarget = #targetQueue
+            local sisaTumbal = #normalizeUUIDList(MyConfig:Get("pet_tumbal_uuids") or {})
+            sendDiscordWebhook(
+                "Auto Shark - Berhasil!",
+                "**Pet selesai:** " .. finishedLabel ..
+                "\n**Mutasi:** " .. targetMut ..
+                "\n**Target tersisa:** " .. sisaTarget ..
+                "\n**Tumbal tersisa:** " .. sisaTumbal,
+                3066993
+            )
+
             if #targetQueue > 0 then
                 currentTarget = table.remove(targetQueue, 1)
                 currentTumbal = getNextTumbal()
@@ -1199,6 +1270,7 @@ local function autoLevelingLoop()
             equipPet(currentTargetUUID)
 
             -- Pantau level target sampai melewati Target Level
+            local finishedNormally = false
             while isAutoLevelingRunning do
                 task.wait(1)
                 local lvl = getPetLevel(currentTargetUUID)
@@ -1209,12 +1281,24 @@ local function autoLevelingLoop()
                 targetLevel = tonumber(MyConfig:Get("target_level")) or targetLevel
                 if lvl > targetLevel then
                     print("Target", currentTargetUUID, "sudah mencapai level " .. lvl .. " (> target " .. targetLevel .. ")")
+                    finishedNormally = true
                     break
                 end
             end
 
             unequipPet(currentTargetUUID)
             print("Unequip target leveling:", currentTargetUUID)
+
+            if finishedNormally then
+                local finishedLabel = getPetLabelForWebhook(currentTargetUUID)
+                sendDiscordWebhook(
+                    "Auto Leveling - Selesai!",
+                    "**Pet selesai:** " .. finishedLabel ..
+                    "\n**Target Level:** " .. targetLevel ..
+                    "\n**Target tersisa:** " .. #queue,
+                    3066993
+                )
+            end
         end
 
         task.wait(0.5)
