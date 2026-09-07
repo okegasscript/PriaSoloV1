@@ -1222,8 +1222,8 @@ local function prepareLevelingQueue()
         local lvl = getPetLevel(uuid)
         if lvl == nil then
             print("Target leveling", uuid, "tidak ditemukan, di-skip")
-        elseif lvl > targetLevel then
-            print("Target leveling", uuid, "sudah level " .. lvl .. " (> target " .. targetLevel .. "), di-skip")
+        elseif lvl >= targetLevel then
+            print("Target leveling", uuid, "sudah level " .. lvl .. " (>= target " .. targetLevel .. "), di-skip")
         else
             table.insert(queue, uuid)
         end
@@ -1263,8 +1263,8 @@ local function autoLevelingLoop()
 
         if lvlCheck == nil then
             print("Target", currentTargetUUID, "tidak ditemukan, di-skip.")
-        elseif lvlCheck > targetLevel then
-            print("Target", currentTargetUUID, "sudah level " .. lvlCheck .. " (> target " .. targetLevel .. "), di-skip.")
+        elseif lvlCheck >= targetLevel then
+            print("Target", currentTargetUUID, "sudah level " .. lvlCheck .. " (>= target " .. targetLevel .. "), di-skip.")
         else
             print("Equip target leveling:", currentTargetUUID, "(level saat ini:", lvlCheck, ")")
             equipPet(currentTargetUUID)
@@ -1279,8 +1279,8 @@ local function autoLevelingLoop()
                     break
                 end
                 targetLevel = tonumber(MyConfig:Get("target_level")) or targetLevel
-                if lvl > targetLevel then
-                    print("Target", currentTargetUUID, "sudah mencapai level " .. lvl .. " (> target " .. targetLevel .. ")")
+                if lvl >= targetLevel then
+                    print("Target", currentTargetUUID, "sudah mencapai level " .. lvl .. " (>= target " .. targetLevel .. ")")
                     finishedNormally = true
                     break
                 end
