@@ -939,7 +939,13 @@ local function startLevelingAnubis()
                         favoritedFruitInstance = nil
                         if not anubisLevelingRunning then break end
 
-                        -- LANGKAH 2
+                        -- LANGKAH 2 : CLEAR GARDEN -> EQUIP FROG
+                        anubisSetStatus("Status: Clear Garden + Equip Frog...")
+                        debugStep("Langkah 2: ClearGarden sebelum equip Tim Frog")
+                        runClearGarden()
+                        task.wait(0.5)
+                        if not anubisLevelingRunning then break end
+
                         anubisSetStatus("Status: Equip Frog...")
                         equipPetListTogether(frog)
                         if not anubisLevelingRunning then break end
@@ -959,7 +965,13 @@ local function startLevelingAnubis()
                         task.wait(0.5)
                         if not anubisLevelingRunning then break end
 
-                        -- LANGKAH 3
+                        -- LANGKAH 3 : CLEAR GARDEN -> EQUIP CORNLING
+                        anubisSetStatus("Status: Clear Garden + Equip Cornling...")
+                        debugStep("Langkah 3: ClearGarden sebelum equip Tim Cornling")
+                        runClearGarden()
+                        task.wait(0.5)
+                        if not anubisLevelingRunning then break end
+
                         anubisSetStatus("Status: Equip Cornling...")
                         equipPetListTogether(cornling)
                         local synergyProcs = waitForNotificationCount(function(msg)
@@ -993,7 +1005,13 @@ local function startLevelingAnubis()
                         task.wait(0.5)
                         if not anubisLevelingRunning then break end
 
-                        -- LANGKAH 6
+                        -- LANGKAH 6 : CLEAR GARDEN -> EQUIP ANUBIS + TARGET
+                        anubisSetStatus("Status: Clear Garden + Equip Anubis + Target...")
+                        debugStep("Langkah 6: ClearGarden sebelum equip Tim Anubis + Target")
+                        runClearGarden()
+                        task.wait(0.5)
+                        if not anubisLevelingRunning then break end
+
                         anubisSetStatus("Status: Equip Anubis + Target...")
                         local anubisAndTarget = {}
                         for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
@@ -1052,7 +1070,6 @@ local function startLevelingAnubis()
         stopLevelingAnubis()
     end)
 end
-
 -- ================= SHARK LOGIC =================
 local isAutoSharkRunning = false
 local autoSharkCoroutine = nil
