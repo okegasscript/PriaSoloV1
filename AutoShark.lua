@@ -2,6 +2,10 @@
 -- SCRIPT FINAL: Pria Solo HUB - Auto Shark Tab
 -- ============================================================
 
+-- Forward declare MyConfig di paling atas supaya fungsi webhook
+-- (yang didefinisikan lebih dulu) tetap bisa membaca config secara dinamis.
+local MyConfig = nil
+
 -- ============================================================
 -- 1. LOAD WindUI
 -- ============================================================
@@ -38,15 +42,49 @@ if not DataPetModule then error("Gagal memuat DataPetModule!") end
 -- ============================================================
 -- 2.1 DISCORD WEBHOOK
 -- ============================================================
-local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1513620114975490058/b6VnqOUomMeXuMKdrfKkJrSfOvSh_p98YcwNGEu6NBe6fwi9qvzbKEN8JV-COEbH0Gx_"
+-- URL default (fallback) apabila belum di-setting lewat tab "Webhook".
+local DISCORD_WEBHOOK_URL_DEFAULT = "https://discord.com/api/webhooks/1513620114975490058/b6VnqOUomMeXuMKdrfKkJrSfOvSh_p98YcwNGEu6NBe6fwi9qvzbKEN8JV-COEbH0Gx_"
 local HttpService = game:GetService("HttpService")
 
 -- Ambil fungsi request yang tersedia di executor (beda-beda tiap executor)
 local httpRequest = (syn and syn.request) or (http and http.request) or http_request or request
 
+-- Ambil URL webhook aktif: prioritaskan yang di-setting user lewat tab Webhook,
+-- fallback ke URL default hardcoded kalau belum pernah di-setting / dikosongkan.
+local function getWebhookURL()
+    if MyConfig then
+        local ok, url = pcall(function() return MyConfig:Get("discord_webhook_url") end)
+        if ok and type(url) == "string" and url ~= "" then
+            return url
+        end
+    end
+    return DISCORD_WEBHOOK_URL_DEFAULT
+end
+
+-- Format durasi (detik) jadi teks "Xj Ym Zd" / "Ym Zd" / "Zd"
+local function formatDuration(seconds)
+    seconds = math.floor(tonumber(seconds) or 0)
+    if seconds < 0 then seconds = 0 end
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    local s = seconds % 60
+    if h > 0 then
+        return string.format("%dj %dm %ds", h, m, s)
+    elseif m > 0 then
+        return string.format("%dm %ds", m, s)
+    else
+        return string.format("%ds", s)
+    end
+end
+
 local function sendDiscordWebhook(title, description, color)
     if not httpRequest then
         warn("Fungsi request/http_request tidak ditemukan di executor ini, notifikasi Discord tidak terkirim.")
+        return
+    end
+    local webhookUrl = getWebhookURL()
+    if not webhookUrl or webhookUrl == "" then
+        warn("URL Discord Webhook belum di-setting, notifikasi tidak terkirim.")
         return
     end
     color = color or 3066993 -- hijau
@@ -62,7 +100,7 @@ local function sendDiscordWebhook(title, description, color)
     task.spawn(function()
         local ok, result = pcall(function()
             return httpRequest({
-                Url = DISCORD_WEBHOOK_URL,
+                Url = webhookUrl,
                 Method = "POST",
                 Headers = { ["Content-Type"] = "application/json" },
                 Body = HttpService:JSONEncode(payload),
@@ -201,7 +239,7 @@ local Window = WindUI:CreateWindow({
     },
 })
 
-local MyConfig = Window.ConfigManager:Config("AutoSharkConfig")
+MyConfig = Window.ConfigManager:Config("AutoSharkConfig")
 MyConfig:Load()
 
 -- ============================================================
@@ -609,6 +647,7 @@ local currentTumbal = nil
 local tumbalIndex = 1
 local mutationResult = nil
 local notificationConnection = nil
+local currentTargetStartTime = nil -- dipakai untuk hitung "Lama Pengerjaan" di webhook
 
 local function setupNotificationListener()
     if notificationConnection then return end
@@ -731,6 +770,7 @@ local function autoSharkLoop()
         cleanupNotificationListener()
         return
     end
+    currentTargetStartTime = tick()
     currentTumbal = getNextTumbal()
     if not currentTumbal then
         print("Tidak ada tumbal.")
@@ -808,10 +848,12 @@ local function autoSharkLoop()
             local finishedLabel = getPetLabelForWebhook(currentTarget)
             local sisaTarget = #targetQueue
             local sisaTumbal = #normalizeUUIDList(MyConfig:Get("pet_tumbal_uuids") or {})
+            local durasiStr = formatDuration(tick() - (currentTargetStartTime or tick()))
             sendDiscordWebhook(
                 "Auto Shark - Berhasil!",
                 "**Pet selesai:** " .. finishedLabel ..
                 "\n**Mutasi:** " .. targetMut ..
+                "\n**Lama Pengerjaan:** " .. durasiStr ..
                 "\n**Target tersisa:** " .. sisaTarget ..
                 "\n**Tumbal tersisa:** " .. sisaTumbal,
                 3066993
@@ -819,6 +861,7 @@ local function autoSharkLoop()
 
             if #targetQueue > 0 then
                 currentTarget = table.remove(targetQueue, 1)
+                currentTargetStartTime = tick()
                 currentTumbal = getNextTumbal()
                 if not currentTumbal then
                     print("Tidak ada tumbal tersisa.")
@@ -1267,6 +1310,7 @@ local function autoLevelingLoop()
             print("Target", currentTargetUUID, "sudah level " .. lvlCheck .. " (>= target " .. targetLevel .. "), di-skip.")
         else
             print("Equip target leveling:", currentTargetUUID, "(level saat ini:", lvlCheck, ")")
+            local levelStartTime = tick() -- untuk hitung "Lama Pengerjaan" di webhook
             equipPet(currentTargetUUID)
 
             -- Pantau level target sampai melewati Target Level
@@ -1291,10 +1335,12 @@ local function autoLevelingLoop()
 
             if finishedNormally then
                 local finishedLabel = getPetLabelForWebhook(currentTargetUUID)
+                local durasiStr = formatDuration(tick() - levelStartTime)
                 sendDiscordWebhook(
                     "Auto Leveling - Selesai!",
                     "**Pet selesai:** " .. finishedLabel ..
                     "\n**Target Level:** " .. targetLevel ..
+                    "\n**Lama Pengerjaan:** " .. durasiStr ..
                     "\n**Target tersisa:** " .. #queue,
                     3066993
                 )
@@ -1570,6 +1616,64 @@ local togglePNPStartStop = PNPActionSection:Toggle({
             print("PNP: OFF")
             stopPNP()
         end
+    end
+})
+
+-- ============================================================
+-- 25. TAB WEBHOOK (setting URL Discord Webhook tanpa edit file)
+-- ============================================================
+local TabWebhook = Window:Tab({
+    Title = "Webhook",
+    Icon = "solar:link-bold",
+})
+
+local WebhookSettingsSection = TabWebhook:Section({ Title = "Discord Webhook Settings" })
+
+local savedWebhookURL = MyConfig:Get("discord_webhook_url")
+if type(savedWebhookURL) ~= "string" then savedWebhookURL = "" end
+
+local inputWebhookURL = WebhookSettingsSection:Input({
+    Title = "Url Discord Webhook",
+    Value = savedWebhookURL,
+    Placeholder = "https://discord.com/api/webhooks/...",
+    Flag = "discord_webhook_url_input",
+    Callback = function(value)
+        value = tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "") -- trim spasi
+        MyConfig:Set("discord_webhook_url", value)
+        MyConfig:Save()
+        if value ~= "" then
+            print("URL Discord Webhook tersimpan:", value)
+        else
+            print("URL Discord Webhook dikosongkan, akan pakai URL default.")
+        end
+    end
+})
+
+WebhookSettingsSection:Space()
+
+WebhookSettingsSection:Button({
+    Title = "Kirim Test Webhook",
+    Justify = "Center",
+    Callback = function()
+        sendDiscordWebhook(
+            "Test Webhook",
+            "Ini adalah pesan tes dari Pria Solo HUB.\nJika kamu melihat pesan ini, webhook sudah terhubung dengan benar.",
+            3447003
+        )
+        print("Test webhook dikirim.")
+    end
+})
+
+WebhookSettingsSection:Space()
+
+WebhookSettingsSection:Button({
+    Title = "Reset ke Webhook Default",
+    Justify = "Center",
+    Callback = function()
+        inputWebhookURL:SetValue("")
+        MyConfig:Set("discord_webhook_url", "")
+        MyConfig:Save()
+        print("URL Discord Webhook direset ke default.")
     end
 })
 
