@@ -1,13 +1,16 @@
 -- ============================================================
--- PRIA SOLO HUB - ALL IN ONE FINAL
+-- PRIA SOLO HUB - ALL IN ONE FINAL (v2)
 -- Tab : Auto Shark | Auto Leveling | Auto Leveling Anubis | PNP | Webhook
 -- Notes:
 --   - DataPetModule: SATU SUMBER (PriaSoloV1)
 --   - Webhook: satu settingan (tab Webhook, dipakai semua fitur)
 --   - Badge "PSHB" minimize diperbesar
---   - Dropdown pet seragam & rapi (Mutasi Nama 1,25kg lv45 + #2 utk duplikat)
+--   - Dropdown pet seragam & rapi
 --   - Anubis: ClearGarden otomatis sebelum equip Frog/Cornling/Anubis
---   - Cache data pet saat startup (tidak scan inventory berkali-kali)
+--   - Anubis: target selesai -> unequip TARGET saja, Tim Anubis tetap,
+--            lalu equip target baru (fast-swap). Frog/Cornling tidak diulang.
+--   - Anubis: penghitung sisa buah MENGABAIKAN buah favorit & entry pohon
+--   - Cache data pet saat startup
 -- ============================================================
 
 -- ================= SERVICES =================
@@ -15,8 +18,8 @@ local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
-local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
 
 local GameEvents = ReplicatedStorage:FindFirstChild("GameEvents")
 local PetsServiceEvent = GameEvents and GameEvents:FindFirstChild("PetsService")
@@ -27,7 +30,7 @@ local BuyGearStock = GameEvents and GameEvents:FindFirstChild("BuyGearStock")
 
 local PetsService = PetsServiceEvent
 
--- ================= UI REFS (diisi belakangan) =================
+-- ================= UI REFS =================
 local MyConfig = nil
 local AnubisConfig = nil
 local Anubis_AutoToggle, Anubis_AutoBuyToggle, Anubis_StatusLabel
@@ -43,7 +46,7 @@ local function loadWindUI()
         "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua",
         "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
     }
-    for attempt = 1, 3 do
+    for _ = 1, 3 do
         for _, url in ipairs(urls) do
             local ok, result = pcall(function()
                 return loadstring(game:HttpGet(url))()
@@ -109,9 +112,7 @@ end
 local function getWebhookURL()
     if MyConfig then
         local ok, url = pcall(function() return MyConfig:Get("discord_webhook_url") end)
-        if ok and type(url) == "string" and url ~= "" then
-            return url
-        end
+        if ok and type(url) == "string" and url ~= "" then return url end
     end
     return DISCORD_WEBHOOK_URL_DEFAULT
 end
@@ -140,13 +141,43 @@ local function sendDiscordWebhook(title, description, color)
     end)
 end
 
-local function getPetInfoByUUID(uuid)
-    local ok, allPets = pcall(function() return DataPetModule.findPets({}) end)
-    if not ok or not allPets then return nil end
-    for _, pet in ipairs(allPets) do
-        if pet.uuid == uuid then return pet end
+local function normalizeUUIDList(list)
+    if type(list) ~= "table" then return {} end
+    local result = {}
+    for _, item in ipairs(list) do
+        if type(item) == "string" and item ~= "" then
+            table.insert(result, item)
+        elseif type(item) == "table" and item.Value then
+            table.insert(result, item.Value)
+        end
     end
-    return nil
+    return result
+end
+
+local function formatPetDisplay(pet)
+    local weightStr = string.format("%.2f", pet.weight or 0)
+    weightStr = weightStr:gsub("%.", ",")
+    return string.format("%s %s %skg lv%d", pet.mutation, pet.name, weightStr, pet.level)
+end
+
+local function buildDropdownOptions(petList)
+    local options = {}
+    local nameCount = {}
+    for _, pet in ipairs(petList or {}) do
+        local baseDisplay = formatPetDisplay(pet)
+        local display = baseDisplay
+        if nameCount[baseDisplay] then
+            nameCount[baseDisplay] = nameCount[baseDisplay] + 1
+            display = display .. " (#" .. nameCount[baseDisplay] .. ")"
+        else
+            nameCount[baseDisplay] = 1
+        end
+        table.insert(options, { Title = display, Value = pet.uuid })
+    end
+    if #options == 0 then
+        table.insert(options, { Title = "Tidak ada pet", Value = "" })
+    end
+    return options
 end
 
 local function getEquippedPetsUUIDs()
@@ -183,49 +214,19 @@ local function getMutationList()
     return mutations
 end
 
-local function formatPetDisplay(pet)
-    local weightStr = string.format("%.2f", pet.weight or 0)
-    weightStr = weightStr:gsub("%.", ",")
-    return string.format("%s %s %skg lv%d", pet.mutation, pet.name, weightStr, pet.level)
-end
-
-local function buildDropdownOptions(petList)
-    local options = {}
-    local nameCount = {}
-    for _, pet in ipairs(petList or {}) do
-        local baseDisplay = formatPetDisplay(pet)
-        local display = baseDisplay
-        if nameCount[baseDisplay] then
-            nameCount[baseDisplay] = nameCount[baseDisplay] + 1
-            display = display .. " (#" .. nameCount[baseDisplay] .. ")"
-        else
-            nameCount[baseDisplay] = 1
-        end
-        table.insert(options, { Title = display, Value = pet.uuid })
+local function getPetInfoByUUID(uuid)
+    local ok, allPets = pcall(function() return DataPetModule.findPets({}) end)
+    if not ok or not allPets then return nil end
+    for _, pet in ipairs(allPets) do
+        if pet.uuid == uuid then return pet end
     end
-    if #options == 0 then
-        table.insert(options, { Title = "Tidak ada pet", Value = "" })
-    end
-    return options
+    return nil
 end
 
 local function getPetLabelForWebhook(uuid)
     local pet = getPetInfoByUUID(uuid)
     if pet then return formatPetDisplay(pet) end
     return uuid
-end
-
-local function normalizeUUIDList(list)
-    if type(list) ~= "table" then return {} end
-    local result = {}
-    for _, item in ipairs(list) do
-        if type(item) == "string" and item ~= "" then
-            table.insert(result, item)
-        elseif type(item) == "table" and item.Value then
-            table.insert(result, item.Value)
-        end
-    end
-    return result
 end
 
 local function getEquipCFrame()
@@ -238,16 +239,12 @@ end
 
 local function equipPet(uuid)
     if not PetsService or uuid == "" or uuid == nil then return end
-    pcall(function()
-        PetsService:FireServer("EquipPet", uuid, getEquipCFrame())
-    end)
+    pcall(function() PetsService:FireServer("EquipPet", uuid, getEquipCFrame()) end)
 end
 
 local function unequipPet(uuid)
     if not PetsService or uuid == "" or uuid == nil then return end
-    pcall(function()
-        PetsService:FireServer("UnequipPet", uuid)
-    end)
+    pcall(function() PetsService:FireServer("UnequipPet", uuid) end)
 end
 
 local function runClearGarden()
@@ -265,7 +262,7 @@ local function runClearGarden()
 end
 
 -- ============================================================
--- WINDOW (badge PSHB besar saat minimize)
+-- WINDOW
 -- ============================================================
 local Window = WindUI:CreateWindow({
     Title = "Pria Solo HUB",
@@ -281,7 +278,7 @@ local Window = WindUI:CreateWindow({
         OnlyMobile = false,
         CornerRadius = UDim.new(1, 0),
         StrokeThickness = 2,
-        Scale = 1.5, -- badge lebih besar (ubah ke 2 kalau mau lebih besar lagi)
+        Scale = 1.5,
         Color = ColorSequence.new(Color3.fromHex("#30FF6A"), Color3.fromHex("#e7ff2f")),
     },
 })
@@ -289,12 +286,8 @@ local Window = WindUI:CreateWindow({
 local function createConfigObject(name)
     local cm = Window.ConfigManager
     if not cm then
-        return {
-            Get = function() return nil end,
-            Set = function() end,
-            Save = function() end,
-            Load = function() return nil end,
-        }
+        return { Get = function() return nil end, Set = function() end,
+                 Save = function() end, Load = function() return nil end }
     end
     if type(cm.CreateConfig) == "function" then
         local ok, cfg = pcall(cm.CreateConfig, cm, name)
@@ -304,16 +297,12 @@ local function createConfigObject(name)
         local ok, cfg = pcall(cm.Config, cm, name)
         if ok and cfg then return cfg end
     end
-    return {
-        Get = function() return nil end,
-        Set = function() end,
-        Save = function() end,
-        Load = function() return nil end,
-    }
+    return { Get = function() return nil end, Set = function() end,
+             Save = function() end, Load = function() return nil end }
 end
 
-MyConfig = createConfigObject("AutoSharkConfig")       -- config utama (termasuk webhook)
-AnubisConfig = createConfigObject("PriaSoloConfig")    -- config khusus Anubis
+MyConfig = createConfigObject("AutoSharkConfig")
+AnubisConfig = createConfigObject("PriaSoloConfig")
 pcall(function() MyConfig:Load() end)
 
 -- ================= FARMESP (EMBEDDED) =================
@@ -327,9 +316,7 @@ local function loadMutations()
         if handler then
             local ok, h = pcall(require, handler)
             if ok and h and h.GetMutations then
-                for name in pairs(h:GetMutations()) do
-                    officialMutations[name] = true
-                end
+                for name in pairs(h:GetMutations()) do officialMutations[name] = true end
                 return
             end
         end
@@ -400,6 +387,8 @@ local function resolvePart(inst)
     return nil
 end
 
+-- isFruit = true  -> buah sungguhan (folder Fruits / Fruit_Spawn)
+-- isFruit = false -> entry pohon/tanaman (TIDAK dihitung sebagai buah)
 local function scanFruitEntry(plantFolder, fruit, index, isFruit)
     local muts = collectMutations(fruit)
     for _, desc in ipairs(fruit:GetDescendants()) do
@@ -411,7 +400,8 @@ local function scanFruitEntry(plantFolder, fruit, index, isFruit)
     end
     local part = resolvePart(fruit)
     local position = part and part.Position or fruit:GetPivot().Position
-    local uuid = fruit:GetAttribute("OBJECT_UUID") or fruit:GetAttribute("UUID") or plantFolder.Name .. "_fruit_" .. index
+    local uuid = fruit:GetAttribute("OBJECT_UUID") or fruit:GetAttribute("UUID")
+        or (plantFolder.Name .. "_fruit_" .. index)
     return {
         name = plantFolder.Name .. " #" .. index,
         mutCount = countTable(muts),
@@ -419,7 +409,7 @@ local function scanFruitEntry(plantFolder, fruit, index, isFruit)
         uuid = uuid,
         instance = fruit,
         plantName = plantFolder.Name,
-        isFruit = isFruit and true or false, -- true = buah sungguhan, false = entry pohon/tanaman
+        isFruit = isFruit and true or false,
     }
 end
 
@@ -434,12 +424,12 @@ local function scanAllPlants()
     local index = 0
 
     for _, plantFolder in ipairs(plantsPhysical:GetChildren()) do
-        local fruitsFolder = plantFolder:FindFirstChild("Fruits") or plantFolder:FindFirstChild("Fruit_Spawn")
+        local fruitsFolder = plantFolder:FindFirstChild("Fruits")
+            or plantFolder:FindFirstChild("Fruit_Spawn")
         if fruitsFolder then
             for _, fruit in ipairs(fruitsFolder:GetChildren()) do
                 if fruit:IsA("BasePart") or fruit:IsA("Model") or fruit:IsA("Folder") then
                     index = index + 1
-                    -- isFruit = TRUE: ini buah sungguhan di folder Fruits/Fruit_Spawn
                     table.insert(plantList, scanFruitEntry(plantFolder, fruit, index, true))
                 end
             end
@@ -457,56 +447,14 @@ local function scanAllPlants()
                 index = index + 1
                 local entry = scanFruitEntry(plantFolder, target, index, false)
                 entry.name = plantFolder.Name
-                entry.uuid = target:GetAttribute("OBJECT_UUID") or target:GetAttribute("UUID") or plantFolder.Name .. "_" .. index
+                entry.uuid = target:GetAttribute("OBJECT_UUID")
+                    or target:GetAttribute("UUID")
+                    or (plantFolder.Name .. "_" .. index)
                 table.insert(plantList, entry)
             end
         end
     end
     return plantList
-end
--- Deteksi buah yang difavoritkan (nama atribut bisa beda tiap update game,
--- jadi dicek beberapa nama umum). Buah favorit TIDAK akan berkurang mutasinya,
--- karena itu wajib dikecualikan dari hitungan "sisa buah di atas threshold".
-local FAVORITE_ATTR_NAMES = { "Favorite", "Favorited", "IsFavorite", "Favourite" }
-
-local function isFavoriteMarked(inst)
-    if not inst or type(inst.GetAttribute) ~= "function" then return false end
-    for _, attrName in ipairs(FAVORITE_ATTR_NAMES) do
-        if inst:GetAttribute(attrName) == true then
-            return true
-        end
-    end
-    -- beberapa buah berbentuk Model dengan penanda di child-nya
-    if inst:IsA("Model") then
-        for _, child in ipairs(inst:GetChildren()) do
-            for _, attrName in ipairs(FAVORITE_ATTR_NAMES) do
-                if child:GetAttribute(attrName) == true then return true end
-            end
-        end
-    end
-    return false
-end
-
-local function countFruitsOnTreeWithMutationAbove(treeName, threshold, exceptInstance)
-    local count = 0
-    for _, p in ipairs(scanFruitsOnTree(treeName)) do
-        if p.isFruit ~= false                     -- 1) hanya buah sungguhan (bukan entry pohon)
-            and p.instance ~= exceptInstance      -- 2) buah favorit milik script
-            and not isFavoriteMarked(p.instance)  -- 3) SEMUA buah favorit lain (dilindungi game)
-            and p.mutCount > threshold then       -- 4) yang benar-benar di atas ambang
-            count = count + 1
-        end
-    end
-    return count
-end
-
-local function findFruitOnTreeByExactMutation(treeName, mutationCount)
-    for _, p in ipairs(scanFruitsOnTree(treeName)) do
-        if p.isFruit ~= false and p.mutCount == mutationCount then
-            return p
-        end
-    end
-    return nil
 end
 
 local function createESP(data)
@@ -604,17 +552,47 @@ local function scanFruitsOnTree(treeName)
     return result
 end
 
+-- Deteksi buah favorit. Nama atribut bisa berbeda antar update game,
+-- jadi dicek beberapa nama umum + child dari Model.
+local FAVORITE_ATTR_NAMES = { "Favorite", "Favorited", "IsFavorite", "Favourite", "isFavorite" }
+
+local function isFavoriteMarked(inst)
+    if not inst or type(inst.GetAttribute) ~= "function" then return false end
+    for _, attrName in ipairs(FAVORITE_ATTR_NAMES) do
+        if inst:GetAttribute(attrName) == true then return true end
+    end
+    if inst:IsA("Model") then
+        for _, child in ipairs(inst:GetChildren()) do
+            if type(child.GetAttribute) == "function" then
+                for _, attrName in ipairs(FAVORITE_ATTR_NAMES) do
+                    if child:GetAttribute(attrName) == true then return true end
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function findFruitOnTreeByExactMutation(treeName, mutationCount)
     for _, p in ipairs(scanFruitsOnTree(treeName)) do
-        if p.mutCount == mutationCount then return p end
+        if p.isFruit ~= false and p.mutCount == mutationCount then
+            return p
+        end
     end
     return nil
 end
 
+-- SATU-SATUNYA definisi penghitung sisa buah.
+-- Yang dihitung HANYA: buah sungguhan, bukan favorit, dan mutasinya > threshold.
 local function countFruitsOnTreeWithMutationAbove(treeName, threshold, exceptInstance)
     local count = 0
     for _, p in ipairs(scanFruitsOnTree(treeName)) do
-        if p.instance ~= exceptInstance and p.mutCount > threshold then count = count + 1 end
+        if p.isFruit ~= false
+            and p.instance ~= exceptInstance
+            and not isFavoriteMarked(p.instance)
+            and p.mutCount > threshold then
+            count = count + 1
+        end
     end
     return count
 end
@@ -624,7 +602,7 @@ local currentAnubis, currentCornling, currentFrog = {}, {}, {}
 local currentTargets = {}
 local currentTree = ""
 local currentTargetLevel = 500
-local currentMutationCount = 1
+local currentMutationCount = 110
 local currentCollectThreshold = 10
 local suppressToggleCallback = false
 local suppressAutoBuyToggle = false
@@ -635,6 +613,7 @@ local NOTIF_TIMEOUT_SECONDS = 60
 local SPIDER_WEB_WAVE_TARGET_COUNT = 7
 local SPIDER_WEB_WAVE_TIMEOUT_SECONDS = 120
 local ANUBIS_TIMEOUT_SECONDS = 60
+local ANUBIS_WAIT_MUTATION_THRESHOLD = 10   -- ambang "sisa buah > 10"
 local SHOVEL_MAX_PASSES = 6
 
 local function debugStep(msg)
@@ -664,7 +643,9 @@ local function getPetByUUID(uuid)
     if not pet then return nil end
 
     local petData = pet.PetData or {}
-    local okM, mutation = pcall(function() return DataPetModule.getAutoMutationName(petData.MutationType or "Normal") end)
+    local okM, mutation = pcall(function()
+        return DataPetModule.getAutoMutationName(petData.MutationType or "Normal")
+    end)
     local level = petData.Level or petData.Lvl or 0
     local baseWeight = petData.Weight or petData.BaseWeight or 0
     local currentWeight = baseWeight
@@ -720,35 +701,6 @@ local function equipToolByPrefix(namePrefix)
     return findToolInCharacterByPrefix(namePrefix) or tool
 end
 
-local function equipNonFavoriteTool()
-    local humanoid = getHumanoid()
-    if not humanoid then return false end
-    local character = LocalPlayer.Character
-    if not character then return false end
-
-    local currentTool = nil
-    for _, item in ipairs(character:GetChildren()) do
-        if item:IsA("Tool") then currentTool = item break end
-    end
-    if not currentTool then return true end
-    if not string.find(currentTool.Name, "Favorite Tool") then return true end
-
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if not backpack then return false end
-    for _, tool in ipairs(backpack:GetChildren()) do
-        if tool:IsA("Tool") and not string.find(tool.Name, "Favorite Tool") then
-            humanoid:EquipTool(tool)
-            task.wait(0.3)
-            debugStep("Lepas Favorite Tool, equip: " .. tool.Name)
-            return true
-        end
-    end
-    currentTool.Parent = backpack
-    task.wait(0.3)
-    debugStep("Favorite Tool dilepas ke Backpack")
-    return true
-end
-
 local autoBuyRunning = false
 
 local function startAutoBuyFavoriteTool()
@@ -793,7 +745,11 @@ local function shovelFruitsOnTree(treeName, threshold)
     for pass = 1, SHOVEL_MAX_PASSES do
         local toShovel = {}
         for _, p in ipairs(scanFruitsOnTree(treeName)) do
-            if p.mutCount < threshold then table.insert(toShovel, p.instance) end
+            -- hanya buah sungguhan, bukan favorit, mutasi di bawah threshold
+            if p.isFruit ~= false and not isFavoriteMarked(p.instance)
+                and p.mutCount < threshold then
+                table.insert(toShovel, p.instance)
+            end
         end
         if #toShovel == 0 then break end
 
@@ -892,7 +848,6 @@ local function waitForGrowthOrSpiderWeb(matchFn, spiderWebTargetCount, timeoutSe
     return growthFound, spiderWebCount
 end
 
--- vFinal: webhook target tercapai Anubis pakai webhook TUNGGAL
 local function sendTargetReachedWebhook(petData, targetUUID, targetLevel, durationSeconds)
     local petName = (petData and petData.name) or "Unknown"
     local petMutation = (petData and petData.mutation) or "Normal"
@@ -946,7 +901,7 @@ local function startLevelingAnubis()
     anubisSetStatus("Status: Running...")
 
     task.spawn(function()
-        local anubisEquipped = false -- FLAG BARU: status Tim Anubis sedang terpasang atau tidak
+        local anubisEquipped = false
 
         local ok, err = pcall(function()
             for targetIndex, targetUUID in ipairs(targets) do
@@ -959,7 +914,7 @@ local function startLevelingAnubis()
                 if currentLevel >= targetLevel then
                     debugStep("Target sudah level " .. currentLevel .. ", lewati.")
                     unequipPetByUUID(targetUUID)
-                    -- PERUBAHAN: Tim Anubis tetap terpasang, tidak di-unequip
+                    -- Tim Anubis tetap terpasang
                 else
                     local favoritedFruitInstance = nil
                     local targetStartTime = tick()
@@ -967,10 +922,9 @@ local function startLevelingAnubis()
                     while anubisLevelingRunning and currentLevel < targetLevel do
 
                         if not anubisEquipped then
-                            -- ==========================================================
-                            -- SIKLUS PERSIAPAN PENUH (perilaku lama, untuk target baru
-                            -- yang belum pernah masuk step Anubis / setelah retry)
-                            -- ==========================================================
+                            -- ==========================================
+                            -- SIKLUS PERSIAPAN PENUH
+                            -- ==========================================
 
                             -- LANGKAH 1
                             anubisSetStatus("Status: Bersihkan buah target sebelumnya...")
@@ -993,11 +947,13 @@ local function startLevelingAnubis()
                             if not anubisLevelingRunning then unequipPetList(frog) break end
 
                             anubisSetStatus("Status: Tunggu growth / Spider Web Wave...")
-                            local frogTrigger = string.format("Frog advanced the growth of your %s plant by 24 hours", tree)
+                            local frogTrigger = string.format(
+                                "Frog advanced the growth of your %s plant by 24 hours", tree)
                             local growthFound, spiderWebCount = waitForGrowthOrSpiderWeb(function(msg)
                                 return msg:find(frogTrigger) ~= nil
                             end, SPIDER_WEB_WAVE_TARGET_COUNT, SPIDER_WEB_WAVE_TIMEOUT_SECONDS)
-                            debugStep(growthFound and "Growth diterima!" or (spiderWebCount .. "x Spider Web Wave"))
+                            debugStep(growthFound and "Growth diterima!"
+                                or (spiderWebCount .. "x Spider Web Wave"))
 
                             unequipPetList(frog)
                             task.wait(0.5)
@@ -1053,28 +1009,25 @@ local function startLevelingAnubis()
                             for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
                             table.insert(anubisAndTarget, targetUUID)
                             equipPetListTogether(anubisAndTarget)
-                            anubisEquipped = true -- Tim Anubis (dan target) sekarang terpasang
+                            anubisEquipped = true
                         else
-                            -- ==========================================================
-                            -- PERUBAHAN: FAST-SWAP TARGET
-                            -- Target sebelumnya sudah selesai & targetnya sudah di-unequip.
-                            -- Tim Anubis MASIH TERPASANG -> cukup equip target baru saja,
-                            -- TIDAK kembali ke Langkah 1-5, TIDAK ClearGarden
-                            -- (ClearGarden justru akan melepas Tim Anubis).
-                            -- ==========================================================
+                            -- ==========================================
+                            -- FAST-SWAP: Tim Anubis masih terpasang
+                            -- ==========================================
                             anubisSetStatus("Status: Ganti target (Anubis tetap terpasang)...")
-                            debugStep("Fast-swap: equip target baru #" .. targetIndex .. " (Anubis tidak dilepas)")
+                            debugStep("Fast-swap: equip target baru #" .. targetIndex)
                             equipPetByUUID(targetUUID)
                             task.wait(0.5)
-                            targetStartTime = tick() -- reset durasi pengerjaan untuk target baru
+                            targetStartTime = tick()
                         end
 
                         anubisSetStatus("Status: Equip Anubis + Target...")
 
-                        -- ============ TUNGGU (PARAMETER SAMA SEPERTI SEBELUMNYA) ============
+                        -- ================= LOOP TUNGGU =================
                         local anubisStartTime = tick()
                         local reachedDuringAnubis = false
                         local lastDebugAt = 0
+
                         while anubisLevelingRunning do
                             local pd = getPetByUUID(targetUUID)
                             local lvl = pd and (pd.level or 0) or currentLevel
@@ -1084,23 +1037,29 @@ local function startLevelingAnubis()
                                 break
                             end
 
-                            local remaining = countFruitsOnTreeWithMutationAbove(tree, 10, favoritedFruitInstance)
+                            local remaining = countFruitsOnTreeWithMutationAbove(
+                                tree, ANUBIS_WAIT_MUTATION_THRESHOLD, favoritedFruitInstance)
+
                             if remaining <= 0 then
-                                debugStep("Semua buah di " .. tree .. " sudah <= 10 mutasi (kecuali favorit) -> LANJUT step berikutnya")
+                                debugStep("Semua buah di " .. tree
+                                    .. " sudah <= " .. ANUBIS_WAIT_MUTATION_THRESHOLD
+                                    .. " mutasi (favorit dikecualikan) -> LANJUT step berikutnya")
                                 break
                             end
 
                             if (tick() - anubisStartTime) >= ANUBIS_TIMEOUT_SECONDS then
-                                debugStep("Timeout " .. ANUBIS_TIMEOUT_SECONDS .. " dtk, masih ada " .. remaining .. " buah > 10 mutasi")
+                                debugStep("Timeout " .. ANUBIS_TIMEOUT_SECONDS
+                                    .. " dtk, masih ada " .. remaining .. " buah > "
+                                    .. ANUBIS_WAIT_MUTATION_THRESHOLD .. " mutasi")
                                 break
                             end
 
-                            -- log tiap 10 detik: tunjukkan sisa apa saja yang masih dihitung
                             if (tick() - lastDebugAt) >= 10 then
                                 lastDebugAt = tick()
-                                debugStep("Menunggu Anubis... sisa buah > 10 mutasi: " .. remaining)
+                                debugStep("Menunggu Anubis... sisa buah > "
+                                    .. ANUBIS_WAIT_MUTATION_THRESHOLD .. " mutasi: " .. remaining)
                                 for _, p in ipairs(scanFruitsOnTree(tree)) do
-                                    if p.mutCount > 10 then
+                                    if p.mutCount > ANUBIS_WAIT_MUTATION_THRESHOLD then
                                         debugStep(string.format(
                                             "   - %s : %d mutasi | isFruit=%s | favorit=%s",
                                             p.name, p.mutCount,
@@ -1112,21 +1071,20 @@ local function startLevelingAnubis()
 
                             task.wait(1)
                         end
+                        -- ===============================================
+
                         if reachedDuringAnubis then
-                            -- ==========================================================
-                            -- PERUBAHAN UTAMA:
-                            -- Target selesai -> UNEQUIP TARGET SAJA (Anubis tetap on),
-                            -- lalu lanjut ke target berikutnya dalam bentuk fast-swap.
-                            -- TIDAK ada pengulangan Frog/Cornling untuk target berikutnya.
-                            -- ==========================================================
-                            debugStep("✅ Level tercapai! Unequip TARGET saja, Tim Anubis tetap terpasang.")
-                            sendTargetReachedWebhook(getPetByUUID(targetUUID), targetUUID, targetLevel, tick() - targetStartTime)
+                            -- Target selesai -> unequip TARGET saja
+                            debugStep("✅ Level tercapai! Unequip TARGET saja, Anubis tetap terpasang.")
+                            sendTargetReachedWebhook(getPetByUUID(targetUUID), targetUUID,
+                                targetLevel, tick() - targetStartTime)
                             unequipPetByUUID(targetUUID)
-                            break -- lanjut target berikutnya (masuk cabang fast-swap)
+                            task.wait(0.5)
+                            break
                         end
 
-                        -- Belum tercapai: perilaku LAMA -> lepas Anubis + target,
-                        -- siklus penuh (Frog/Cornling/dst) diulang untuk target yang sama
+                        -- Belum tercapai -> perilaku lama: lepas Anubis + target,
+                        -- ulangi siklus penuh untuk target yang sama
                         local anubisAndTarget = {}
                         for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
                         table.insert(anubisAndTarget, targetUUID)
@@ -1137,25 +1095,24 @@ local function startLevelingAnubis()
                         -- LANGKAH 7
                         local petDataNow = getPetByUUID(targetUUID)
                         currentLevel = petDataNow and (petDataNow.level or 0) or currentLevel
-                        anubisSetStatus(string.format("Status: Leveling... %d/%d", currentLevel, targetLevel))
+                        anubisSetStatus(string.format("Status: Leveling... %d/%d",
+                            currentLevel, targetLevel))
 
                         if currentLevel >= targetLevel then
                             debugStep("✅ Level tercapai!")
-                            sendTargetReachedWebhook(petDataNow, targetUUID, targetLevel, tick() - targetStartTime)
+                            sendTargetReachedWebhook(petDataNow, targetUUID, targetLevel,
+                                tick() - targetStartTime)
                             unequipPetByUUID(targetUUID)
                             break
                         end
                     end
 
                     unequipPetByUUID(targetUUID)
-                    -- PERUBAHAN: Tim Anubis TIDAK di-unequip di sini.
-                    -- Ia tetap terpasang untuk target berikutnya, dan baru dilepas
-                    -- setelah SEMUA target selesai (blok setelah for-loop).
                     debugStep("Selesai target #" .. targetIndex)
                 end
             end
 
-            -- SEMUA target selesai / dihentikan -> baru lepas Tim Anubis
+            -- Semua target selesai / dihentikan -> baru lepas Tim Anubis
             if anubisEquipped then
                 debugStep("Semua target selesai, unequip Tim Anubis.")
                 for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
@@ -1165,7 +1122,6 @@ local function startLevelingAnubis()
 
         if not ok then
             warn("❌ [Anubis] Error: " .. tostring(err))
-            -- Safety: pastikan Tim Anubis tidak tertinggal terpasang saat error
             pcall(function()
                 for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
             end)
@@ -1226,9 +1182,7 @@ local function getMimicUUID(timSharkUUIDs)
     local equippedMap = {}
     for _, uuid in ipairs(equipped) do equippedMap[uuid] = true end
     for _, uuid in ipairs(timSharkUUIDs) do
-        if equippedMap[uuid] and getCooldownPassive(uuid) == "Mimicry" then
-            return uuid
-        end
+        if equippedMap[uuid] and getCooldownPassive(uuid) == "Mimicry" then return uuid end
     end
     return nil
 end
@@ -1619,10 +1573,7 @@ local function updateTumbalDropdown(mutation)
     local validUUIDs = {}
     for _, uuid in ipairs(savedUUIDs) do
         for _, opt in ipairs(newOptions) do
-            if opt.Value == uuid then
-                table.insert(validUUIDs, uuid)
-                break
-            end
+            if opt.Value == uuid then table.insert(validUUIDs, uuid) break end
         end
     end
     safeCall(Shark_DD_Tumbal, "Refresh", newOptions)
@@ -1643,10 +1594,7 @@ local function updateTargetLevelingDropdown(targetLevel)
     local validUUIDs = {}
     for _, uuid in ipairs(savedUUIDs) do
         for _, opt in ipairs(newOptions) do
-            if opt.Value == uuid then
-                table.insert(validUUIDs, uuid)
-                break
-            end
+            if opt.Value == uuid then table.insert(validUUIDs, uuid) break end
         end
     end
     safeCall(AL_DD_Target, "Refresh", newOptions)
@@ -1715,7 +1663,6 @@ end
 
 -- ============================================================
 -- CACHE DATA PET (ANTI BERAT SAAT START)
--- findPets() hanya 2x saat startup; semua dropdown memakai cache.
 -- ============================================================
 local FavPetsCache, NonFavPetsCache = {}, {}
 local FavOptionsCache, NonFavOptionsCache, NormalTargetOptionsCache = {}, {}, {}
@@ -1808,7 +1755,6 @@ Shark_DD_Mutasi = SharkSettings:Dropdown({
 })
 SharkSettings:Space()
 
--- Pet Tumbal (query spesifik, hanya 1x di awal)
 local initialTumbalPets = {}
 pcall(function()
     initialTumbalPets = DataPetModule.findPets({ isFavorite = false, mutation = defaultMutation }) or {}
@@ -1889,7 +1835,7 @@ SharkConfigSec:Button({ Title = "Muat Konfigurasi", Justify = "Center", Callback
     print("Konfigurasi dimuat!")
 end })
 
--- ------------- TAB AUTO LEVELING (SCRIPT A) -------------
+-- ------------- TAB AUTO LEVELING -------------
 local TabAutoLeveling = Window:Tab({ Title = "Auto Leveling", Icon = "solar:graph-up-bold" })
 local ALSettings = TabAutoLeveling:Section({ Title = "Auto Leveling Settings" })
 
@@ -1970,7 +1916,7 @@ ALSettings:Button({ Title = "Refresh Data Pet", Justify = "Center", Callback = f
     print("Data Auto Leveling di-refresh!")
 end })
 
--- ------------- TAB AUTO LEVELING ANUBIS (SCRIPT B) -------------
+-- ------------- TAB AUTO LEVELING ANUBIS -------------
 local TabAnubis = Window:Tab({ Title = "Auto Leveling Anubis", Icon = "solar:skull-bold" })
 local ASettings = TabAnubis:Section({ Title = "Anubis Leveling Settings" })
 
@@ -2097,7 +2043,6 @@ Anubis_IN_Threshold = ASettings:Input({
     end
 })
 
--- vFinal: webhook Anubis otomatis pakai tab Webhook (setting tunggal)
 ASettings:Space()
 ASettings:Paragraph({
     Title = "Info Webhook",
@@ -2203,7 +2148,7 @@ PNPActions:Toggle({
     end
 })
 
--- ------------- TAB WEBHOOK (TUNGGAL - SEMUA FITUR) -------------
+-- ------------- TAB WEBHOOK -------------
 local TabWebhook = Window:Tab({ Title = "Webhook", Icon = "solar:link-bold" })
 local WebhookSettings = TabWebhook:Section({ Title = "Discord Webhook Settings" })
 
@@ -2247,14 +2192,8 @@ pcall(applyAnubisUIFromConfig)
 pcall(function() MyConfig:Save() end)
 pcall(function() AnubisConfig:Save() end)
 
-if MyConfig:Get("is_running") then
-    task.delay(1, startAutoShark)
-end
-if MyConfig:Get("is_leveling_running") then
-    task.delay(1, startAutoLeveling)
-end
-if MyConfig:Get("is_pnp_running") then
-    task.delay(1, startPNP)
-end
+if MyConfig:Get("is_running") then task.delay(1, startAutoShark) end
+if MyConfig:Get("is_leveling_running") then task.delay(1, startAutoLeveling) end
+if MyConfig:Get("is_pnp_running") then task.delay(1, startPNP) end
 
-print("✅ Pria Solo HUB (All-in-One Final) siap digunakan!")
+print("✅ Pria Solo HUB (All-in-One Final v2) siap digunakan!")
