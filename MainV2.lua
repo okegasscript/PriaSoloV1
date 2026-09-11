@@ -900,6 +900,8 @@ local function startLevelingAnubis()
     anubisSetStatus("Status: Running...")
 
     task.spawn(function()
+        local anubisEquipped = false -- FLAG BARU: status Tim Anubis sedang terpasang atau tidak
+
         local ok, err = pcall(function()
             for targetIndex, targetUUID in ipairs(targets) do
                 if not anubisLevelingRunning then break end
@@ -911,96 +913,119 @@ local function startLevelingAnubis()
                 if currentLevel >= targetLevel then
                     debugStep("Target sudah level " .. currentLevel .. ", lewati.")
                     unequipPetByUUID(targetUUID)
-                    for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
+                    -- PERUBAHAN: Tim Anubis tetap terpasang, tidak di-unequip
                 else
                     local favoritedFruitInstance = nil
                     local targetStartTime = tick()
 
                     while anubisLevelingRunning and currentLevel < targetLevel do
 
-                        -- LANGKAH 1
-                        anubisSetStatus("Status: Bersihkan buah target sebelumnya...")
-                        unfavoritePreviousTargetFruit(favoritedFruitInstance)
-                        favoritedFruitInstance = nil
-                        if not anubisLevelingRunning then break end
+                        if not anubisEquipped then
+                            -- ==========================================================
+                            -- SIKLUS PERSIAPAN PENUH (perilaku lama, untuk target baru
+                            -- yang belum pernah masuk step Anubis / setelah retry)
+                            -- ==========================================================
 
-                        -- LANGKAH 2 : CLEAR GARDEN -> EQUIP FROG
-                        anubisSetStatus("Status: Clear Garden + Equip Frog...")
-                        debugStep("Langkah 2: ClearGarden sebelum equip Tim Frog")
-                        runClearGarden()
-                        task.wait(0.5)
-                        if not anubisLevelingRunning then break end
+                            -- LANGKAH 1
+                            anubisSetStatus("Status: Bersihkan buah target sebelumnya...")
+                            unfavoritePreviousTargetFruit(favoritedFruitInstance)
+                            favoritedFruitInstance = nil
+                            if not anubisLevelingRunning then break end
 
-                        equipPetListTogether(frog)
-                        if not anubisLevelingRunning then break end
+                            -- LANGKAH 2 : CLEAR GARDEN -> EQUIP FROG
+                            anubisSetStatus("Status: Clear Garden + Equip Frog...")
+                            debugStep("Langkah 2: ClearGarden sebelum equip Tim Frog")
+                            runClearGarden()
+                            task.wait(0.5)
+                            if not anubisLevelingRunning then break end
 
-                        anubisSetStatus("Status: Shovel buah mutasi rendah...")
-                        shovelFruitsOnTree(tree, collectThreshold)
-                        if not anubisLevelingRunning then unequipPetList(frog) break end
+                            equipPetListTogether(frog)
+                            if not anubisLevelingRunning then break end
 
-                        anubisSetStatus("Status: Tunggu growth / Spider Web Wave...")
-                        local frogTrigger = string.format("Frog advanced the growth of your %s plant by 24 hours", tree)
-                        local growthFound, spiderWebCount = waitForGrowthOrSpiderWeb(function(msg)
-                            return msg:find(frogTrigger) ~= nil
-                        end, SPIDER_WEB_WAVE_TARGET_COUNT, SPIDER_WEB_WAVE_TIMEOUT_SECONDS)
-                        debugStep(growthFound and "Growth diterima!" or (spiderWebCount .. "x Spider Web Wave"))
+                            anubisSetStatus("Status: Shovel buah mutasi rendah...")
+                            shovelFruitsOnTree(tree, collectThreshold)
+                            if not anubisLevelingRunning then unequipPetList(frog) break end
 
-                        unequipPetList(frog)
-                        task.wait(0.5)
-                        if not anubisLevelingRunning then break end
+                            anubisSetStatus("Status: Tunggu growth / Spider Web Wave...")
+                            local frogTrigger = string.format("Frog advanced the growth of your %s plant by 24 hours", tree)
+                            local growthFound, spiderWebCount = waitForGrowthOrSpiderWeb(function(msg)
+                                return msg:find(frogTrigger) ~= nil
+                            end, SPIDER_WEB_WAVE_TARGET_COUNT, SPIDER_WEB_WAVE_TIMEOUT_SECONDS)
+                            debugStep(growthFound and "Growth diterima!" or (spiderWebCount .. "x Spider Web Wave"))
 
-                        -- LANGKAH 3 : CLEAR GARDEN -> EQUIP CORNLING
-                        anubisSetStatus("Status: Clear Garden + Equip Cornling...")
-                        debugStep("Langkah 3: ClearGarden sebelum equip Tim Cornling")
-                        runClearGarden()
-                        task.wait(0.5)
-                        if not anubisLevelingRunning then break end
+                            unequipPetList(frog)
+                            task.wait(0.5)
+                            if not anubisLevelingRunning then break end
 
-                        equipPetListTogether(cornling)
-                        local synergyProcs = waitForNotificationCount(function(msg)
-                            return msg:find("Corn Synergy") ~= nil
-                        end, NOTIF_TARGET_COUNT, NOTIF_TIMEOUT_SECONDS)
-                        debugStep("Corn Synergy: " .. synergyProcs .. "/" .. NOTIF_TARGET_COUNT)
-                        unequipPetList(cornling)
-                        task.wait(0.5)
-                        if not anubisLevelingRunning then break end
+                            -- LANGKAH 3 : CLEAR GARDEN -> EQUIP CORNLING
+                            anubisSetStatus("Status: Clear Garden + Equip Cornling...")
+                            debugStep("Langkah 3: ClearGarden sebelum equip Tim Cornling")
+                            runClearGarden()
+                            task.wait(0.5)
+                            if not anubisLevelingRunning then break end
 
-                        -- LANGKAH 3B
-                        anubisSetStatus("Status: Shovel pasca Cornling...")
-                        shovelFruitsOnTree(tree, collectThreshold)
-                        if not anubisLevelingRunning then break end
+                            equipPetListTogether(cornling)
+                            local synergyProcs = waitForNotificationCount(function(msg)
+                                return msg:find("Corn Synergy") ~= nil
+                            end, NOTIF_TARGET_COUNT, NOTIF_TIMEOUT_SECONDS)
+                            debugStep("Corn Synergy: " .. synergyProcs .. "/" .. NOTIF_TARGET_COUNT)
+                            unequipPetList(cornling)
+                            task.wait(0.5)
+                            if not anubisLevelingRunning then break end
 
-                        -- LANGKAH 4
-                        anubisSetStatus("Status: Favoritkan buah target mutasi...")
-                        local matched = findFruitOnTreeByExactMutation(tree, mutationCount)
-                        if matched then
-                            setFruitFavorite(matched.instance, true)
-                            favoritedFruitInstance = matched.instance
+                            -- LANGKAH 3B
+                            anubisSetStatus("Status: Shovel pasca Cornling...")
+                            shovelFruitsOnTree(tree, collectThreshold)
+                            if not anubisLevelingRunning then break end
+
+                            -- LANGKAH 4
+                            anubisSetStatus("Status: Favoritkan buah target mutasi...")
+                            local matched = findFruitOnTreeByExactMutation(tree, mutationCount)
+                            if matched then
+                                setFruitFavorite(matched.instance, true)
+                                favoritedFruitInstance = matched.instance
+                            else
+                                debugStep("Tidak ada buah tepat " .. mutationCount .. " mutasi")
+                            end
+                            task.wait(0.5)
+                            if not anubisLevelingRunning then break end
+
+                            -- LANGKAH 5
+                            anubisSetStatus("Status: Shovel buah rendah...")
+                            shovelFruitsOnTree(tree, collectThreshold)
+                            task.wait(0.5)
+                            if not anubisLevelingRunning then break end
+
+                            -- LANGKAH 6 : CLEAR GARDEN -> EQUIP ANUBIS + TARGET
+                            anubisSetStatus("Status: Clear Garden + Equip Anubis + Target...")
+                            debugStep("Langkah 6: ClearGarden sebelum equip Tim Anubis + Target")
+                            runClearGarden()
+                            task.wait(0.5)
+                            if not anubisLevelingRunning then break end
+
+                            local anubisAndTarget = {}
+                            for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
+                            table.insert(anubisAndTarget, targetUUID)
+                            equipPetListTogether(anubisAndTarget)
+                            anubisEquipped = true -- Tim Anubis (dan target) sekarang terpasang
                         else
-                            debugStep("Tidak ada buah tepat " .. mutationCount .. " mutasi")
+                            -- ==========================================================
+                            -- PERUBAHAN: FAST-SWAP TARGET
+                            -- Target sebelumnya sudah selesai & targetnya sudah di-unequip.
+                            -- Tim Anubis MASIH TERPASANG -> cukup equip target baru saja,
+                            -- TIDAK kembali ke Langkah 1-5, TIDAK ClearGarden
+                            -- (ClearGarden justru akan melepas Tim Anubis).
+                            -- ==========================================================
+                            anubisSetStatus("Status: Ganti target (Anubis tetap terpasang)...")
+                            debugStep("Fast-swap: equip target baru #" .. targetIndex .. " (Anubis tidak dilepas)")
+                            equipPetByUUID(targetUUID)
+                            task.wait(0.5)
+                            targetStartTime = tick() -- reset durasi pengerjaan untuk target baru
                         end
-                        task.wait(0.5)
-                        if not anubisLevelingRunning then break end
 
-                        -- LANGKAH 5
-                        anubisSetStatus("Status: Shovel buah rendah...")
-                        shovelFruitsOnTree(tree, collectThreshold)
-                        task.wait(0.5)
-                        if not anubisLevelingRunning then break end
-
-                        -- LANGKAH 6 : CLEAR GARDEN -> EQUIP ANUBIS + TARGET
-                        anubisSetStatus("Status: Clear Garden + Equip Anubis + Target...")
-                        debugStep("Langkah 6: ClearGarden sebelum equip Tim Anubis + Target")
-                        runClearGarden()
-                        task.wait(0.5)
-                        if not anubisLevelingRunning then break end
-
-                        local anubisAndTarget = {}
-                        for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
-                        table.insert(anubisAndTarget, targetUUID)
-                        equipPetListTogether(anubisAndTarget)
                         anubisSetStatus("Status: Equip Anubis + Target...")
 
+                        -- ============ TUNGGU (PARAMETER SAMA SEPERTI SEBELUMNYA) ============
                         local anubisStartTime = tick()
                         local reachedDuringAnubis = false
                         while anubisLevelingRunning do
@@ -1017,16 +1042,27 @@ local function startLevelingAnubis()
                             task.wait(1)
                         end
 
-                        unequipPetList(anubisAndTarget)
-                        task.wait(0.5)
-
                         if reachedDuringAnubis then
-                            debugStep("✅ Level tercapai (saat Anubis equip)!")
+                            -- ==========================================================
+                            -- PERUBAHAN UTAMA:
+                            -- Target selesai -> UNEQUIP TARGET SAJA (Anubis tetap on),
+                            -- lalu lanjut ke target berikutnya dalam bentuk fast-swap.
+                            -- TIDAK ada pengulangan Frog/Cornling untuk target berikutnya.
+                            -- ==========================================================
+                            debugStep("✅ Level tercapai! Unequip TARGET saja, Tim Anubis tetap terpasang.")
                             sendTargetReachedWebhook(getPetByUUID(targetUUID), targetUUID, targetLevel, tick() - targetStartTime)
                             unequipPetByUUID(targetUUID)
-                            for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
-                            break
+                            break -- lanjut target berikutnya (masuk cabang fast-swap)
                         end
+
+                        -- Belum tercapai: perilaku LAMA -> lepas Anubis + target,
+                        -- siklus penuh (Frog/Cornling/dst) diulang untuk target yang sama
+                        local anubisAndTarget = {}
+                        for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
+                        table.insert(anubisAndTarget, targetUUID)
+                        unequipPetList(anubisAndTarget)
+                        anubisEquipped = false
+                        task.wait(0.5)
 
                         -- LANGKAH 7
                         local petDataNow = getPetByUUID(targetUUID)
@@ -1037,19 +1073,34 @@ local function startLevelingAnubis()
                             debugStep("✅ Level tercapai!")
                             sendTargetReachedWebhook(petDataNow, targetUUID, targetLevel, tick() - targetStartTime)
                             unequipPetByUUID(targetUUID)
-                            for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
                             break
                         end
                     end
 
                     unequipPetByUUID(targetUUID)
-                    for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
+                    -- PERUBAHAN: Tim Anubis TIDAK di-unequip di sini.
+                    -- Ia tetap terpasang untuk target berikutnya, dan baru dilepas
+                    -- setelah SEMUA target selesai (blok setelah for-loop).
                     debugStep("Selesai target #" .. targetIndex)
                 end
             end
+
+            -- SEMUA target selesai / dihentikan -> baru lepas Tim Anubis
+            if anubisEquipped then
+                debugStep("Semua target selesai, unequip Tim Anubis.")
+                for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
+                anubisEquipped = false
+            end
         end)
 
-        if not ok then warn("❌ [Anubis] Error: " .. tostring(err)) end
+        if not ok then
+            warn("❌ [Anubis] Error: " .. tostring(err))
+            -- Safety: pastikan Tim Anubis tidak tertinggal terpasang saat error
+            pcall(function()
+                for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
+            end)
+        end
+
         stopLevelingAnubis()
     end)
 end
