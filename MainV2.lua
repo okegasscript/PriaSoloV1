@@ -400,7 +400,7 @@ local function resolvePart(inst)
     return nil
 end
 
-local function scanFruitEntry(plantFolder, fruit, index)
+local function scanFruitEntry(plantFolder, fruit, index, isFruit)
     local muts = collectMutations(fruit)
     for _, desc in ipairs(fruit:GetDescendants()) do
         if desc:IsA("BasePart") or desc:IsA("Model") then
@@ -419,6 +419,7 @@ local function scanFruitEntry(plantFolder, fruit, index)
         uuid = uuid,
         instance = fruit,
         plantName = plantFolder.Name,
+        isFruit = isFruit and true or false, -- true = buah sungguhan, false = entry pohon/tanaman
     }
 end
 
@@ -438,7 +439,8 @@ local function scanAllPlants()
             for _, fruit in ipairs(fruitsFolder:GetChildren()) do
                 if fruit:IsA("BasePart") or fruit:IsA("Model") or fruit:IsA("Folder") then
                     index = index + 1
-                    table.insert(plantList, scanFruitEntry(plantFolder, fruit, index))
+                    -- isFruit = TRUE: ini buah sungguhan di folder Fruits/Fruit_Spawn
+                    table.insert(plantList, scanFruitEntry(plantFolder, fruit, index, true))
                 end
             end
         else
@@ -453,7 +455,7 @@ local function scanAllPlants()
             end
             if target:IsA("BasePart") or target:IsA("Model") then
                 index = index + 1
-                local entry = scanFruitEntry(plantFolder, target, index)
+                local entry = scanFruitEntry(plantFolder, target, index, false)
                 entry.name = plantFolder.Name
                 entry.uuid = target:GetAttribute("OBJECT_UUID") or target:GetAttribute("UUID") or plantFolder.Name .. "_" .. index
                 table.insert(plantList, entry)
@@ -461,6 +463,50 @@ local function scanAllPlants()
         end
     end
     return plantList
+end
+-- Deteksi buah yang difavoritkan (nama atribut bisa beda tiap update game,
+-- jadi dicek beberapa nama umum). Buah favorit TIDAK akan berkurang mutasinya,
+-- karena itu wajib dikecualikan dari hitungan "sisa buah di atas threshold".
+local FAVORITE_ATTR_NAMES = { "Favorite", "Favorited", "IsFavorite", "Favourite" }
+
+local function isFavoriteMarked(inst)
+    if not inst or type(inst.GetAttribute) ~= "function" then return false end
+    for _, attrName in ipairs(FAVORITE_ATTR_NAMES) do
+        if inst:GetAttribute(attrName) == true then
+            return true
+        end
+    end
+    -- beberapa buah berbentuk Model dengan penanda di child-nya
+    if inst:IsA("Model") then
+        for _, child in ipairs(inst:GetChildren()) do
+            for _, attrName in ipairs(FAVORITE_ATTR_NAMES) do
+                if child:GetAttribute(attrName) == true then return true end
+            end
+        end
+    end
+    return false
+end
+
+local function countFruitsOnTreeWithMutationAbove(treeName, threshold, exceptInstance)
+    local count = 0
+    for _, p in ipairs(scanFruitsOnTree(treeName)) do
+        if p.isFruit ~= false                     -- 1) hanya buah sungguhan (bukan entry pohon)
+            and p.instance ~= exceptInstance      -- 2) buah favorit milik script
+            and not isFavoriteMarked(p.instance)  -- 3) SEMUA buah favorit lain (dilindungi game)
+            and p.mutCount > threshold then       -- 4) yang benar-benar di atas ambang
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function findFruitOnTreeByExactMutation(treeName, mutationCount)
+    for _, p in ipairs(scanFruitsOnTree(treeName)) do
+        if p.isFruit ~= false and p.mutCount == mutationCount then
+            return p
+        end
+    end
+    return nil
 end
 
 local function createESP(data)
@@ -1028,6 +1074,7 @@ local function startLevelingAnubis()
                         -- ============ TUNGGU (PARAMETER SAMA SEPERTI SEBELUMNYA) ============
                         local anubisStartTime = tick()
                         local reachedDuringAnubis = false
+                        local lastDebugAt = 0
                         while anubisLevelingRunning do
                             local pd = getPetByUUID(targetUUID)
                             local lvl = pd and (pd.level or 0) or currentLevel
@@ -1036,12 +1083,35 @@ local function startLevelingAnubis()
                                 reachedDuringAnubis = true
                                 break
                             end
+
                             local remaining = countFruitsOnTreeWithMutationAbove(tree, 10, favoritedFruitInstance)
-                            if remaining <= 0 then break end
-                            if (tick() - anubisStartTime) >= ANUBIS_TIMEOUT_SECONDS then break end
+                            if remaining <= 0 then
+                                debugStep("Semua buah di " .. tree .. " sudah <= 10 mutasi (kecuali favorit) -> LANJUT step berikutnya")
+                                break
+                            end
+
+                            if (tick() - anubisStartTime) >= ANUBIS_TIMEOUT_SECONDS then
+                                debugStep("Timeout " .. ANUBIS_TIMEOUT_SECONDS .. " dtk, masih ada " .. remaining .. " buah > 10 mutasi")
+                                break
+                            end
+
+                            -- log tiap 10 detik: tunjukkan sisa apa saja yang masih dihitung
+                            if (tick() - lastDebugAt) >= 10 then
+                                lastDebugAt = tick()
+                                debugStep("Menunggu Anubis... sisa buah > 10 mutasi: " .. remaining)
+                                for _, p in ipairs(scanFruitsOnTree(tree)) do
+                                    if p.mutCount > 10 then
+                                        debugStep(string.format(
+                                            "   - %s : %d mutasi | isFruit=%s | favorit=%s",
+                                            p.name, p.mutCount,
+                                            tostring(p.isFruit), tostring(isFavoriteMarked(p.instance))
+                                        ))
+                                    end
+                                end
+                            end
+
                             task.wait(1)
                         end
-
                         if reachedDuringAnubis then
                             -- ==========================================================
                             -- PERUBAHAN UTAMA:
