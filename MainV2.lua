@@ -1,8 +1,10 @@
 -- ============================================================
--- PRIA SOLO HUB - ALL IN ONE v25 (STABIL)
--- Tab: Auto Shark | Auto Leveling | Auto Leveling Anubis | PNP | Webhook
--- FIX: semua fungsi didefinisikan SEBELUM UI (menghilangkan
---      "attempt to call a nil value" akibat urutan deklarasi)
+-- PRIA SOLO HUB - ALL IN ONE v26
+-- Tab : Auto Shark | Auto Leveling | Auto Leveling Anubis | PNP | Webhook
+-- Perubahan v26:
+--   1) WEBHOOK JADI SATU SETTINGAN (tab Webhook, dipakai semua fitur)
+--   2) Badge "PSHB" minimize diperbesar (OpenButton.Scale)
+--   3) Semua dropdown pet pakai format rapi + penomoran duplikat (#2)
 -- ============================================================
 
 -- ================= SERVICES =================
@@ -11,6 +13,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
 
 local GameEvents = ReplicatedStorage:FindFirstChild("GameEvents")
 local PetsServiceEvent = GameEvents and GameEvents:FindFirstChild("PetsService")
@@ -23,9 +26,10 @@ local PetsService = PetsServiceEvent
 
 -- ================= UI REFS (diisi belakangan) =================
 local MyConfig = nil
+local AnubisConfig = nil
 local Anubis_AutoToggle, Anubis_AutoBuyToggle, Anubis_StatusLabel
 local Anubis_DD_Anubis, Anubis_DD_Cornling, Anubis_DD_Frog, Anubis_DD_Target, Anubis_DD_Tree
-local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold, Anubis_IN_Webhook
+local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold
 local Shark_DD_Shark, Shark_DD_Target, Shark_DD_Mutasi, Shark_DD_Tumbal
 local AL_DD_Tim, AL_DD_Target, AL_IN_TargetLevel
 local PNP_DD_Tim
@@ -106,10 +110,17 @@ local function formatDuration(seconds)
     else return string.format("%ds", s) end
 end
 
+-- ============================================================
+-- WEBHOOK TUNGGAL (v26)
+-- Satu-satunya sumber URL webhook: config "discord_webhook_url".
+-- Dipakai AMBIL untuk Auto Shark, Auto Leveling, dan Auto Leveling Anubis.
+-- ============================================================
 local function getWebhookURL()
     if MyConfig then
         local ok, url = pcall(function() return MyConfig:Get("discord_webhook_url") end)
-        if ok and type(url) == "string" and url ~= "" then return url end
+        if ok and type(url) == "string" and url ~= "" then
+            return url
+        end
     end
     return DISCORD_WEBHOOK_URL_DEFAULT
 end
@@ -181,16 +192,14 @@ local function getMutationList()
     return mutations
 end
 
+-- ============================================================
+-- FORMAT DROPDOWN RAPI (v26) - format Script A, dipakai SEMUA tab
+-- Contoh: "Blossoming Dragonfly 1,25kg lv45" (+ " #2" bila nama sama)
+-- ============================================================
 local function formatPetDisplay(pet)
     local weightStr = string.format("%.2f", pet.weight or 0)
     weightStr = weightStr:gsub("%.", ",")
     return string.format("%s %s %skg lv%d", pet.mutation, pet.name, weightStr, pet.level)
-end
-
-local function getPetLabelForWebhook(uuid)
-    local pet = getPetInfoByUUID(uuid)
-    if pet then return formatPetDisplay(pet) end
-    return uuid
 end
 
 local function buildDropdownOptions(petList)
@@ -211,6 +220,12 @@ local function buildDropdownOptions(petList)
         table.insert(options, { Title = "Tidak ada pet", Value = "" })
     end
     return options
+end
+
+local function getPetLabelForWebhook(uuid)
+    local pet = getPetInfoByUUID(uuid)
+    if pet then return formatPetDisplay(pet) end
+    return uuid
 end
 
 local function normalizeUUIDList(list)
@@ -262,7 +277,9 @@ local function runClearGarden()
     print("ClearGarden: Selesai.")
 end
 
--- ================= WINDOW & CONFIG =================
+-- ============================================================
+-- WINDOW (badge PSHB lebih besar saat minimize)
+-- ============================================================
 local Window = WindUI:CreateWindow({
     Title = "Pria Solo HUB",
     Folder = "PriaSoloHUB",
@@ -277,7 +294,7 @@ local Window = WindUI:CreateWindow({
         OnlyMobile = false,
         CornerRadius = UDim.new(1, 0),
         StrokeThickness = 2,
-        Scale = 0.55,
+        Scale = 1.5, -- v26: dulu 0.55 (kecil). Naikkan ke 2 kalau mau lebih besar lagi.
         Color = ColorSequence.new(Color3.fromHex("#30FF6A"), Color3.fromHex("#e7ff2f")),
     },
 })
@@ -285,7 +302,6 @@ local Window = WindUI:CreateWindow({
 local function createConfigObject(name)
     local cm = Window.ConfigManager
     if not cm then
-        warn("⚠️ ConfigManager tidak tersedia, config in-memory dipakai.")
         return {
             Get = function() return nil end,
             Set = function() end,
@@ -301,7 +317,6 @@ local function createConfigObject(name)
         local ok, cfg = pcall(cm.Config, cm, name)
         if ok and cfg then return cfg end
     end
-    warn("⚠️ Gagal membuat config '" .. name .. "', memakai config in-memory.")
     return {
         Get = function() return nil end,
         Set = function() end,
@@ -310,8 +325,8 @@ local function createConfigObject(name)
     }
 end
 
-MyConfig = createConfigObject("AutoSharkConfig")                     -- Script A
-local AnubisConfig = createConfigObject("PriaSoloConfig")            -- Script B
+MyConfig = createConfigObject("AutoSharkConfig")          -- config utama (termasuk webhook)
+AnubisConfig = createConfigObject("PriaSoloConfig")       -- config khusus Anubis (tanpa webhook)
 pcall(function() MyConfig:Load() end)
 
 -- ================= FARMESP (EMBEDDED) =================
@@ -368,8 +383,7 @@ local espObjects = {}
 local espConnection = nil
 
 local function getPlantsPhysical()
-    local p = Workspace
-    p = p and p:FindFirstChild("Farm")
+    local p = Workspace:FindFirstChild("Farm")
     p = p and p:FindFirstChild("Farm")
     p = p and p:FindFirstChild("Important")
     p = p and p:FindFirstChild("Plants_Physical")
@@ -579,7 +593,6 @@ local currentTree = ""
 local currentTargetLevel = 500
 local currentMutationCount = 1
 local currentCollectThreshold = 10
-local currentWebhookAnubis = ""
 local suppressToggleCallback = false
 local suppressAutoBuyToggle = false
 local anubisLevelingRunning = false
@@ -597,18 +610,6 @@ end
 
 local function anubisSetStatus(txt)
     if Anubis_StatusLabel then pcall(function() Anubis_StatusLabel:SetDesc(txt) end) end
-end
-
-local function getPetListAnubis(isFavorite)
-    local ok, pets = pcall(function() return DataPetModule.findPets({ isFavorite = isFavorite }) end)
-    local options = {}
-    if not ok or not pets then return options end
-    for _, pet in ipairs(pets) do
-        local display = string.format("%s %s %.0fkg lv%d",
-            pet.mutation or "Normal", pet.name or "Unknown", pet.weight or 0, pet.level or 0)
-        table.insert(options, { Title = display, Value = pet.uuid })
-    end
-    return options
 end
 
 local function getTreeList()
@@ -754,7 +755,7 @@ local function shovelFruitsOnTree(treeName, threshold)
     end
     local shovel = equipToolByPrefix("Shovel [Destroy Plants]")
     if not shovel then return end
-    debugStep("Langkah 2B/3B: shovel di-equip")
+    debugStep("Langkah Shovel: di-equip")
 
     for pass = 1, SHOVEL_MAX_PASSES do
         local toShovel = {}
@@ -858,40 +859,23 @@ local function waitForGrowthOrSpiderWeb(matchFn, spiderWebTargetCount, timeoutSe
     return growthFound, spiderWebCount
 end
 
-local function sendTargetReachedWebhook(webhookUrl, petData, targetUUID, targetLevel, durationSeconds)
-    if not webhookUrl or webhookUrl == "" then return end
+-- ============================================================
+-- WEBHOOK TARGET TERCAPAI (ANUBIS) - v26: pakai webhook TUNGGAL
+-- ============================================================
+local function sendTargetReachedWebhook(petData, targetUUID, targetLevel, durationSeconds)
     local petName = (petData and petData.name) or "Unknown"
     local petMutation = (petData and petData.mutation) or "Normal"
     local petLevel = (petData and petData.level) or targetLevel
 
-    local payload = {
-        embeds = { {
-            title = "🎯 Target Level Tercapai!",
-            color = 3066993,
-            fields = {
-                { name = "Pet", value = tostring(petMutation) .. " " .. tostring(petName), inline = true },
-                { name = "UUID", value = tostring(targetUUID), inline = true },
-                { name = "Level Tercapai", value = tostring(petLevel) .. " / " .. tostring(targetLevel), inline = true },
-                { name = "Lama Pengerjaan", value = formatDuration(durationSeconds), inline = false },
-            },
-        } }
-    }
-    local ok, jsonBody = pcall(function() return HttpService:JSONEncode(payload) end)
-    if not ok then return end
-    task.spawn(function()
-        local sent = false
-        pcall(function()
-            if httpRequest then
-                httpRequest({ Url = webhookUrl, Method = "POST",
-                    Headers = { ["Content-Type"] = "application/json" }, Body = jsonBody })
-                sent = true
-            else
-                HttpService:PostAsync(webhookUrl, jsonBody, Enum.HttpContentType.ApplicationJson)
-                sent = true
-            end
-        end)
-        debugStep(sent and "Webhook terkirim." or "Gagal kirim webhook.")
-    end)
+    sendDiscordWebhook(
+        "🎯 Target Level Tercapai! (Anubis)",
+        "**Pet:** " .. tostring(petMutation) .. " " .. tostring(petName) ..
+        "\n**UUID:** " .. tostring(targetUUID) ..
+        "\n**Level Tercapai:** " .. tostring(petLevel) .. " / " .. tostring(targetLevel) ..
+        "\n**Lama Pengerjaan:** " .. formatDuration(durationSeconds),
+        3066993
+    )
+    debugStep("Webhook terkirim: target level tercapai (" .. formatDuration(durationSeconds) .. ")")
 end
 
 local function unfavoritePreviousTargetFruit(previousInstance)
@@ -949,13 +933,13 @@ local function startLevelingAnubis()
 
                     while anubisLevelingRunning and currentLevel < targetLevel do
 
-                        -- ===== LANGKAH 1 =====
+                        -- LANGKAH 1
                         anubisSetStatus("Status: Bersihkan buah target sebelumnya...")
                         unfavoritePreviousTargetFruit(favoritedFruitInstance)
                         favoritedFruitInstance = nil
                         if not anubisLevelingRunning then break end
 
-                        -- ===== LANGKAH 2 =====
+                        -- LANGKAH 2
                         anubisSetStatus("Status: Equip Frog...")
                         equipPetListTogether(frog)
                         if not anubisLevelingRunning then break end
@@ -969,14 +953,13 @@ local function startLevelingAnubis()
                         local growthFound, spiderWebCount = waitForGrowthOrSpiderWeb(function(msg)
                             return msg:find(frogTrigger) ~= nil
                         end, SPIDER_WEB_WAVE_TARGET_COUNT, SPIDER_WEB_WAVE_TIMEOUT_SECONDS)
-                        debugStep(growthFound and "Growth diterima!" or
-                            (spiderWebCount .. "x Spider Web Wave"))
+                        debugStep(growthFound and "Growth diterima!" or (spiderWebCount .. "x Spider Web Wave"))
 
                         unequipPetList(frog)
                         task.wait(0.5)
                         if not anubisLevelingRunning then break end
 
-                        -- ===== LANGKAH 3 =====
+                        -- LANGKAH 3
                         anubisSetStatus("Status: Equip Cornling...")
                         equipPetListTogether(cornling)
                         local synergyProcs = waitForNotificationCount(function(msg)
@@ -987,12 +970,12 @@ local function startLevelingAnubis()
                         task.wait(0.5)
                         if not anubisLevelingRunning then break end
 
-                        -- ===== LANGKAH 3B =====
+                        -- LANGKAH 3B
                         anubisSetStatus("Status: Shovel pasca Cornling...")
                         shovelFruitsOnTree(tree, collectThreshold)
                         if not anubisLevelingRunning then break end
 
-                        -- ===== LANGKAH 4 =====
+                        -- LANGKAH 4
                         anubisSetStatus("Status: Favoritkan buah target mutasi...")
                         local matched = findFruitOnTreeByExactMutation(tree, mutationCount)
                         if matched then
@@ -1004,13 +987,13 @@ local function startLevelingAnubis()
                         task.wait(0.5)
                         if not anubisLevelingRunning then break end
 
-                        -- ===== LANGKAH 5 =====
+                        -- LANGKAH 5
                         anubisSetStatus("Status: Shovel buah rendah...")
                         shovelFruitsOnTree(tree, collectThreshold)
                         task.wait(0.5)
                         if not anubisLevelingRunning then break end
 
-                        -- ===== LANGKAH 6 =====
+                        -- LANGKAH 6
                         anubisSetStatus("Status: Equip Anubis + Target...")
                         local anubisAndTarget = {}
                         for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
@@ -1038,22 +1021,20 @@ local function startLevelingAnubis()
 
                         if reachedDuringAnubis then
                             debugStep("✅ Level tercapai (saat Anubis equip)!")
-                            sendTargetReachedWebhook(currentWebhookAnubis,
-                                getPetByUUID(targetUUID), targetUUID, targetLevel, tick() - targetStartTime)
+                            sendTargetReachedWebhook(getPetByUUID(targetUUID), targetUUID, targetLevel, tick() - targetStartTime)
                             unequipPetByUUID(targetUUID)
                             for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
                             break
                         end
 
-                        -- ===== LANGKAH 7 =====
+                        -- LANGKAH 7
                         local petDataNow = getPetByUUID(targetUUID)
                         currentLevel = petDataNow and (petDataNow.level or 0) or currentLevel
                         anubisSetStatus(string.format("Status: Leveling... %d/%d", currentLevel, targetLevel))
 
                         if currentLevel >= targetLevel then
                             debugStep("✅ Level tercapai!")
-                            sendTargetReachedWebhook(currentWebhookAnubis,
-                                petDataNow, targetUUID, targetLevel, tick() - targetStartTime)
+                            sendTargetReachedWebhook(petDataNow, targetUUID, targetLevel, tick() - targetStartTime)
                             unequipPetByUUID(targetUUID)
                             for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
                             break
@@ -1072,7 +1053,7 @@ local function startLevelingAnubis()
     end)
 end
 
--- ================= SHARK LOGIC (SCRIPT A) =================
+-- ================= SHARK LOGIC =================
 local isAutoSharkRunning = false
 local autoSharkCoroutine = nil
 local targetQueue = {}
@@ -1421,121 +1402,6 @@ local function stopAutoLeveling()
     runClearGarden()
 end
 
--- ================= DROPDOWN UPDATE FUNCS =================
-local function updateTumbalDropdown(mutation)
-    if not Shark_DD_Tumbal then return end
-    local ok, tumbalPets = pcall(function()
-        return DataPetModule.findPets({ isFavorite = false, mutation = mutation })
-    end)
-    if not ok or not tumbalPets then return end
-    local newOptions = buildDropdownOptions(tumbalPets)
-
-    local savedUUIDs = normalizeUUIDList(MyConfig:Get("pet_tumbal_uuids") or {})
-    local validUUIDs = {}
-    for _, uuid in ipairs(savedUUIDs) do
-        for _, opt in ipairs(newOptions) do
-            if opt.Value == uuid then
-                table.insert(validUUIDs, uuid)
-                break
-            end
-        end
-    end
-    safeCall(Shark_DD_Tumbal, "Refresh", newOptions)
-    safeCall(Shark_DD_Tumbal, "Select", validUUIDs)
-    MyConfig:Set("pet_tumbal_uuids", validUUIDs)
-    pcall(function() MyConfig:Save() end)
-end
-
-local function updateTargetLevelingDropdown(targetLevel)
-    if not AL_DD_Target then return end
-    local ok, pets = pcall(function()
-        return DataPetModule.findPets({ isFavorite = false, maxLevel = targetLevel })
-    end)
-    if not ok or not pets then return end
-    local newOptions = buildDropdownOptions(pets)
-
-    local savedUUIDs = normalizeUUIDList(MyConfig:Get("target_leveling_uuids") or {})
-    local validUUIDs = {}
-    for _, uuid in ipairs(savedUUIDs) do
-        for _, opt in ipairs(newOptions) do
-            if opt.Value == uuid then
-                table.insert(validUUIDs, uuid)
-                break
-            end
-        end
-    end
-    safeCall(AL_DD_Target, "Refresh", newOptions)
-    safeCall(AL_DD_Target, "Select", validUUIDs)
-    MyConfig:Set("target_leveling_uuids", validUUIDs)
-    pcall(function() MyConfig:Save() end)
-end
-
--- ================= APPLY CONFIG FUNCS =================
-local function applySharkUIFromConfig()
-    pcall(function() MyConfig:Load() end)
-    safeCall(Shark_DD_Shark, "Select", MyConfig:Get("tim_shark_uuids") or {})
-    safeCall(Shark_DD_Target, "Select", MyConfig:Get("pet_target_uuids") or {})
-    local mut = MyConfig:Get("target_mutasi")
-    if type(mut) == "string" and mut ~= "" then
-        safeCall(Shark_DD_Mutasi, "Select", mut)
-        updateTumbalDropdown(mut)
-    end
-end
-
-local function applyLevelingUIFromConfig()
-    safeCall(AL_DD_Tim, "Select", MyConfig:Get("tim_leveling_uuids") or {})
-    local tl = tonumber(MyConfig:Get("target_level")) or 500
-    safeCall(AL_IN_TargetLevel, "SetValue", tostring(tl))
-    updateTargetLevelingDropdown(tl)
-end
-
-local function applyPNPUIFromConfig()
-    safeCall(PNP_DD_Tim, "Select", MyConfig:Get("tim_pnp_uuids") or {})
-end
-
-local anubisLegacyMap = {
-    { new = "anubis_tim_anubis",       old = "tim_anubis" },
-    { new = "anubis_tim_cornling",     old = "tim_cornling" },
-    { new = "anubis_tim_frog",         old = "tim_frog" },
-    { new = "anubis_target_leveling",  old = "target_leveling" },
-    { new = "anubis_selected_tree",    old = "selected_tree" },
-    { new = "anubis_target_level",     old = "target_level" },
-    { new = "anubis_mutation_count",   old = "mutation_count" },
-    { new = "anubis_collect_threshold",old = "collect_threshold" },
-    { new = "anubis_webhook_url",      old = "webhook_url" },
-    { new = "anubis_esp_mutation",     old = "esp_mutation" },
-    { new = "anubis_auto_buy_fav_tool",old = "auto_buy_fav_tool" },
-}
-
-local function applyAnubisUIFromConfig(includeToggles)
-    pcall(function() AnubisConfig:Load() end)
-
-    -- migrasi config lama v24 (keys tanpa prefix) -> keys baru (prefix anubis_)
-    for _, m in ipairs(anubisLegacyMap) do
-        if AnubisConfig:Get(m.new) == nil then
-            local ov = AnubisConfig:Get(m.old)
-            if ov ~= nil then AnubisConfig:Set(m.new, ov) end
-        end
-    end
-
-    Anubis_DD_Anubis   = safeCall and nil or nil -- noop (dipakai utk kejelasan)
-    safeCall(Anubis_DD_Anubis,   "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_anubis") or {}))
-    safeCall(Anubis_DD_Cornling, "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_cornling") or {}))
-    safeCall(Anubis_DD_Frog,     "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_frog") or {}))
-    safeCall(Anubis_DD_Target,   "Select", normalizeUUIDList(AnubisConfig:Get("anubis_target_leveling") or {}))
-    safeCall(Anubis_DD_Tree,     "Select", tostring(AnubisConfig:Get("anubis_selected_tree") or ""))
-
-    safeCall(Anubis_IN_TargetLevel, "SetValue", tostring(AnubisConfig:Get("anubis_target_level") or 500))
-    safeCall(Anubis_IN_MutCount,    "SetValue", tostring(AnubisConfig:Get("anubis_mutation_count") or 1))
-    safeCall(Anubis_IN_Threshold,   "SetValue", tostring(AnubisConfig:Get("anubis_collect_threshold") or 10))
-    safeCall(Anubis_IN_Webhook,     "SetValue", tostring(AnubisConfig:Get("anubis_webhook_url") or ""))
-
-    if includeToggles then
-        safeCall(Anubis_AutoToggle, "Set", AnubisConfig:Get("anubis_auto_leveling") or false)
-    end
-    pcall(function() AnubisConfig:Save() end)
-end
-
 -- ================= PNP LOGIC =================
 local isPNPRunning = false
 local pnpOffsets = {}
@@ -1620,6 +1486,114 @@ local function stopPNP()
     print("PNP dihentikan.")
 end
 
+-- ================= DROPDOWN UPDATE FUNCS =================
+local function updateTumbalDropdown(mutation)
+    if not Shark_DD_Tumbal then return end
+    local ok, tumbalPets = pcall(function()
+        return DataPetModule.findPets({ isFavorite = false, mutation = mutation })
+    end)
+    if not ok or not tumbalPets then return end
+    local newOptions = buildDropdownOptions(tumbalPets)
+
+    local savedUUIDs = normalizeUUIDList(MyConfig:Get("pet_tumbal_uuids") or {})
+    local validUUIDs = {}
+    for _, uuid in ipairs(savedUUIDs) do
+        for _, opt in ipairs(newOptions) do
+            if opt.Value == uuid then
+                table.insert(validUUIDs, uuid)
+                break
+            end
+        end
+    end
+    safeCall(Shark_DD_Tumbal, "Refresh", newOptions)
+    safeCall(Shark_DD_Tumbal, "Select", validUUIDs)
+    MyConfig:Set("pet_tumbal_uuids", validUUIDs)
+    pcall(function() MyConfig:Save() end)
+end
+
+local function updateTargetLevelingDropdown(targetLevel)
+    if not AL_DD_Target then return end
+    local ok, pets = pcall(function()
+        return DataPetModule.findPets({ isFavorite = false, maxLevel = targetLevel })
+    end)
+    if not ok or not pets then return end
+    local newOptions = buildDropdownOptions(pets)
+
+    local savedUUIDs = normalizeUUIDList(MyConfig:Get("target_leveling_uuids") or {})
+    local validUUIDs = {}
+    for _, uuid in ipairs(savedUUIDs) do
+        for _, opt in ipairs(newOptions) do
+            if opt.Value == uuid then
+                table.insert(validUUIDs, uuid)
+                break
+            end
+        end
+    end
+    safeCall(AL_DD_Target, "Refresh", newOptions)
+    safeCall(AL_DD_Target, "Select", validUUIDs)
+    MyConfig:Set("target_leveling_uuids", validUUIDs)
+    pcall(function() MyConfig:Save() end)
+end
+
+-- ============ APPLY CONFIG FUNCS ============
+local function applySharkUIFromConfig()
+    pcall(function() MyConfig:Load() end)
+    safeCall(Shark_DD_Shark, "Select", MyConfig:Get("tim_shark_uuids") or {})
+    safeCall(Shark_DD_Target, "Select", MyConfig:Get("pet_target_uuids") or {})
+    local mut = MyConfig:Get("target_mutasi")
+    if type(mut) == "string" and mut ~= "" then
+        safeCall(Shark_DD_Mutasi, "Select", mut)
+        updateTumbalDropdown(mut)
+    end
+end
+
+local function applyLevelingUIFromConfig()
+    safeCall(AL_DD_Tim, "Select", MyConfig:Get("tim_leveling_uuids") or {})
+    local tl = tonumber(MyConfig:Get("target_level")) or 500
+    safeCall(AL_IN_TargetLevel, "SetValue", tostring(tl))
+    updateTargetLevelingDropdown(tl)
+end
+
+local function applyPNPUIFromConfig()
+    safeCall(PNP_DD_Tim, "Select", MyConfig:Get("tim_pnp_uuids") or {})
+end
+
+-- migrasi config Anubis lama v24 (tanpa prefix) -> v25+ (prefix anubis_)
+local anubisLegacyMap = {
+    { new = "anubis_tim_anubis",        old = "tim_anubis" },
+    { new = "anubis_tim_cornling",      old = "tim_cornling" },
+    { new = "anubis_tim_frog",          old = "tim_frog" },
+    { new = "anubis_target_leveling",   old = "target_leveling" },
+    { new = "anubis_selected_tree",     old = "selected_tree" },
+    { new = "anubis_target_level",      old = "target_level" },
+    { new = "anubis_mutation_count",    old = "mutation_count" },
+    { new = "anubis_collect_threshold", old = "collect_threshold" },
+    { new = "anubis_esp_mutation",      old = "esp_mutation" },
+    { new = "anubis_auto_buy_fav_tool", old = "auto_buy_fav_tool" },
+}
+
+local function applyAnubisUIFromConfig()
+    pcall(function() AnubisConfig:Load() end)
+
+    for _, m in ipairs(anubisLegacyMap) do
+        if AnubisConfig:Get(m.new) == nil then
+            local ov = AnubisConfig:Get(m.old)
+            if ov ~= nil then AnubisConfig:Set(m.new, ov) end
+        end
+    end
+
+    safeCall(Anubis_DD_Anubis,   "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_anubis") or {}))
+    safeCall(Anubis_DD_Cornling, "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_cornling") or {}))
+    safeCall(Anubis_DD_Frog,     "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_frog") or {}))
+    safeCall(Anubis_DD_Target,   "Select", normalizeUUIDList(AnubisConfig:Get("anubis_target_leveling") or {}))
+    safeCall(Anubis_DD_Tree,     "Select", tostring(AnubisConfig:Get("anubis_selected_tree") or ""))
+    safeCall(Anubis_IN_TargetLevel, "SetValue", tostring(AnubisConfig:Get("anubis_target_level") or 500))
+    safeCall(Anubis_IN_MutCount,    "SetValue", tostring(AnubisConfig:Get("anubis_mutation_count") or 110))
+    safeCall(Anubis_IN_Threshold,   "SetValue", tostring(AnubisConfig:Get("anubis_collect_threshold") or 10))
+
+    pcall(function() AnubisConfig:Save() end)
+end
+
 -- ============================================================
 -- ================== UI CREATION ==================
 -- ============================================================
@@ -1691,7 +1665,10 @@ Shark_DD_Mutasi = SharkSettings:Dropdown({
 })
 SharkSettings:Space()
 
-local initialTumbalPets = DataPetModule.findPets({ isFavorite = false, mutation = defaultMutation })
+local initialTumbalPets = {}
+pcall(function()
+    initialTumbalPets = DataPetModule.findPets({ isFavorite = false, mutation = defaultMutation }) or {}
+end)
 Shark_DD_Tumbal = SharkSettings:Dropdown({
     Title = "Pilih Pet Tumbal", Multi = true, Search = true, AllowNone = true,
     Values = buildDropdownOptions(initialTumbalPets),
@@ -1708,13 +1685,11 @@ SharkSettings:Button({ Title = "Clear All Pet Tumbal", Justify = "Center", Callb
     pcall(function() MyConfig:Save() end)
 end })
 
--- initial tumbal sesuai config
 pcall(function()
-    local tumbalPets = DataPetModule.findPets({ isFavorite = false, mutation = defaultMutation })
+    local tumbalPets = DataPetModule.findPets({ isFavorite = false, mutation = defaultMutation }) or {}
     local opts = buildDropdownOptions(tumbalPets)
-    local savedUUIDs = normalizeUUIDList(MyConfig:Get("pet_tumbal_uuids") or {})
     local valid = {}
-    for _, uuid in ipairs(savedUUIDs) do
+    for _, uuid in ipairs(normalizeUUIDList(MyConfig:Get("pet_tumbal_uuids") or {})) do
         for _, opt in ipairs(opts) do
             if opt.Value == uuid then table.insert(valid, uuid) break end
         end
@@ -1735,7 +1710,9 @@ SharkActions:Toggle({
 })
 SharkActions:Space()
 SharkActions:Button({ Title = "Refresh Pet Tumbal", Justify = "Center", Callback = function()
-    updateTumbalDropdown(Shark_DD_Mutasi and Shark_DD_Mutasi:GetValue() or defaultMutation)
+    local currentMut
+    pcall(function() currentMut = Shark_DD_Mutasi:GetValue() end)
+    updateTumbalDropdown(type(currentMut) == "string" and currentMut or defaultMutation)
 end })
 SharkActions:Space()
 SharkActions:Button({ Title = "Refresh Semua Data Pet", Justify = "Center", Callback = function()
@@ -1778,9 +1755,13 @@ local defaultTargetLevel = tonumber(MyConfig:Get("target_level")) or 500
 defaultTargetLevel = math.clamp(math.floor(defaultTargetLevel), 1, 500)
 MyConfig:Set("target_level", defaultTargetLevel)
 
+local levelingTargetPets = {}
+pcall(function()
+    levelingTargetPets = DataPetModule.findPets({ isFavorite = false, maxLevel = defaultTargetLevel }) or {}
+end)
 AL_DD_Target = ALSettings:Dropdown({
     Title = "Pilih Target Leveling", Multi = true, Search = true, AllowNone = true,
-    Values = buildDropdownOptions(DataPetModule.findPets({ isFavorite = false, maxLevel = defaultTargetLevel })),
+    Values = buildDropdownOptions(levelingTargetPets),
     Value = {},
     Flag = "target_leveling_uuids",
     Callback = function(selected)
@@ -1809,6 +1790,7 @@ AL_IN_TargetLevel = ALSettings:Input({
     end
 })
 
+ALSettings:Space()
 local ALActions = TabAutoLeveling:Section({ Title = "Actions" })
 ALActions:Toggle({
     Title = "Start / Stop",
@@ -1870,9 +1852,10 @@ Anubis_DD_Tree = ASettings:Dropdown({
 })
 ASettings:Space()
 
+-- v26: dropdown pet tab Anubis sekarang pakai format rapi + penomoran duplikat
 Anubis_DD_Frog = ASettings:Dropdown({
     Title = "Pilih Tim Frog / Echo Frog", Multi = true, Search = true, AllowNone = true,
-    Values = getPetListAnubis(true), Value = {},
+    Values = buildDropdownOptions(DataPetModule.findPets({ isFavorite = true })), Value = {},
     Flag = "anubis_tim_frog",
     Callback = function(selected) currentFrog = normalizeUUIDList(selected) end
 })
@@ -1884,7 +1867,7 @@ ASettings:Space()
 
 Anubis_DD_Cornling = ASettings:Dropdown({
     Title = "Pilih Tim Cornling", Multi = true, Search = true, AllowNone = true,
-    Values = getPetListAnubis(true), Value = {},
+    Values = buildDropdownOptions(DataPetModule.findPets({ isFavorite = true })), Value = {},
     Flag = "anubis_tim_cornling",
     Callback = function(selected) currentCornling = normalizeUUIDList(selected) end
 })
@@ -1896,7 +1879,7 @@ ASettings:Space()
 
 Anubis_DD_Anubis = ASettings:Dropdown({
     Title = "Pilih Tim Anubis", Multi = true, Search = true, AllowNone = true,
-    Values = getPetListAnubis(true), Value = {},
+    Values = buildDropdownOptions(DataPetModule.findPets({ isFavorite = true })), Value = {},
     Flag = "anubis_tim_anubis",
     Callback = function(selected) currentAnubis = normalizeUUIDList(selected) end
 })
@@ -1908,7 +1891,7 @@ ASettings:Space()
 
 Anubis_DD_Target = ASettings:Dropdown({
     Title = "Pilih Target Leveling", Multi = true, Search = true, AllowNone = true,
-    Values = getPetListAnubis(false), Value = {},
+    Values = buildDropdownOptions(DataPetModule.findPets({ isFavorite = false })), Value = {},
     Flag = "anubis_target_leveling",
     Callback = function(selected) currentTargets = normalizeUUIDList(selected) end
 })
@@ -1947,26 +1930,26 @@ Anubis_IN_Threshold = ASettings:Input({
         currentCollectThreshold = math.max(tonumber(value) or 10, 0)
     end
 })
-ASettings:Space()
 
-Anubis_IN_Webhook = ASettings:Input({
-    Title = "Webhook Anubis (khusus fitur ini, opsional)",
-    Value = tostring(AnubisConfig:Get("anubis_webhook_url") or ""),
-    Placeholder = "https://discord.com/api/webhooks/...",
-    Flag = "anubis_webhook_url",
-    Callback = function(value)
-        currentWebhookAnubis = tostring(value or "")
-    end
+-- ------------------------------------------------------------
+-- v26: input webhook khusus Anubis DIHAPUS.
+-- Anubis sekarang otomatis memakai URL dari tab "Webhook".
+-- ------------------------------------------------------------
+
+ASettings:Space()
+ASettings:Paragraph({
+    Title = "Info Webhook",
+    Desc = "Notifikasi Anubis memakai URL yang sama dengan tab Webhook (setting tunggal)."
 })
 
 Anubis_StatusLabel = TabAnubis:Paragraph({ Title = "Status", Desc = "Status: Stopped" })
 
 ASettings:Button({ Title = "🔄 Refresh Data", Justify = "Center", Callback = function()
-    safeCall(Anubis_DD_Anubis, "Refresh", getPetListAnubis(true))
-    safeCall(Anubis_DD_Cornling, "Refresh", getPetListAnubis(true))
-    safeCall(Anubis_DD_Frog, "Refresh", getPetListAnubis(true))
-    safeCall(Anubis_DD_Target, "Refresh", getPetListAnubis(false))
-    safeCall(Anubis_DD_Tree, "Refresh", getTreeList())
+    safeCall(Anubis_DD_Anubis,   "Refresh", buildDropdownOptions(DataPetModule.findPets({ isFavorite = true })))
+    safeCall(Anubis_DD_Cornling, "Refresh", buildDropdownOptions(DataPetModule.findPets({ isFavorite = true })))
+    safeCall(Anubis_DD_Frog,     "Refresh", buildDropdownOptions(DataPetModule.findPets({ isFavorite = true })))
+    safeCall(Anubis_DD_Target,   "Refresh", buildDropdownOptions(DataPetModule.findPets({ isFavorite = false })))
+    safeCall(Anubis_DD_Tree,     "Refresh", getTreeList())
     print("✅ Data Anubis di-refresh!")
 end })
 
@@ -1980,12 +1963,11 @@ AConfigSec:Button({ Title = "Simpan Konfigurasi", Justify = "Center", Callback =
     AnubisConfig:Set("anubis_target_level", currentTargetLevel)
     AnubisConfig:Set("anubis_mutation_count", currentMutationCount)
     AnubisConfig:Set("anubis_collect_threshold", currentCollectThreshold)
-    AnubisConfig:Set("anubis_webhook_url", currentWebhookAnubis)
     pcall(function() AnubisConfig:Save() end)
     print("✅ Konfigurasi Anubis disimpan!")
 end })
 AConfigSec:Button({ Title = "Muat Konfigurasi", Justify = "Center", Callback = function()
-    applyAnubisUIFromConfig(false)
+    applyAnubisUIFromConfig()
     currentAnubis = normalizeUUIDList(AnubisConfig:Get("anubis_tim_anubis") or {})
     currentCornling = normalizeUUIDList(AnubisConfig:Get("anubis_tim_cornling") or {})
     currentFrog = normalizeUUIDList(AnubisConfig:Get("anubis_tim_frog") or {})
@@ -1994,7 +1976,6 @@ AConfigSec:Button({ Title = "Muat Konfigurasi", Justify = "Center", Callback = f
     currentTargetLevel = tonumber(AnubisConfig:Get("anubis_target_level")) or 500
     currentMutationCount = tonumber(AnubisConfig:Get("anubis_mutation_count")) or 1
     currentCollectThreshold = tonumber(AnubisConfig:Get("anubis_collect_threshold")) or 10
-    currentWebhookAnubis = tostring(AnubisConfig:Get("anubis_webhook_url") or "")
     print("✅ Konfigurasi Anubis dimuat!")
 end })
 
@@ -2053,12 +2034,12 @@ PNPActions:Toggle({
     end
 })
 
--- ------------- TAB WEBHOOK (SHARED) -------------
+-- ------------- TAB WEBHOOK (TUNGGAL - v26) -------------
 local TabWebhook = Window:Tab({ Title = "Webhook", Icon = "solar:link-bold" })
 local WebhookSettings = TabWebhook:Section({ Title = "Discord Webhook Settings" })
 
 local inputWebhookURL = WebhookSettings:Input({
-    Title = "Url Discord Webhook",
+    Title = "Url Discord Webhook (dipakai semua fitur)",
     Value = tostring(MyConfig:Get("discord_webhook_url") or ""),
     Placeholder = "https://discord.com/api/webhooks/...",
     Flag = "discord_webhook_url_input",
@@ -2066,12 +2047,17 @@ local inputWebhookURL = WebhookSettings:Input({
         value = tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
         MyConfig:Set("discord_webhook_url", value)
         pcall(function() MyConfig:Save() end)
+        if value ~= "" then
+            print("URL Discord Webhook tersimpan (dipakai semua fitur).")
+        else
+            print("URL Discord Webhook dikosongkan, akan pakai URL default.")
+        end
     end
 })
 WebhookSettings:Space()
 WebhookSettings:Button({ Title = "Kirim Test Webhook", Justify = "Center", Callback = function()
     sendDiscordWebhook("Test Webhook",
-        "Ini adalah pesan tes dari Pria Solo HUB.\nJika kamu melihat pesan ini, webhook sudah terhubung.",
+        "Ini adalah pesan tes dari Pria Solo HUB.\nJika kamu melihat pesan ini, webhook sudah terhubung.\nURL ini dipakai oleh: Auto Shark, Auto Leveling, Auto Leveling Anubis.",
         3447003)
 end })
 WebhookSettings:Space()
@@ -2087,12 +2073,11 @@ end })
 pcall(applySharkUIFromConfig)
 pcall(applyLevelingUIFromConfig)
 pcall(applyPNPUIFromConfig)
-pcall(function() applyAnubisUIFromConfig(false) end)
+pcall(applyAnubisUIFromConfig)
 
 pcall(function() MyConfig:Save() end)
 pcall(function() AnubisConfig:Save() end)
 
--- Auto-start fitur Script A jika flag tersimpan true (perilaku sama seperti script A lama)
 if MyConfig:Get("is_running") then
     task.delay(1, startAutoShark)
 end
@@ -2103,4 +2088,4 @@ if MyConfig:Get("is_pnp_running") then
     task.delay(1, startPNP)
 end
 
-print("✅ Pria Solo HUB v25 (All-in-One) siap digunakan!")
+print("✅ Pria Solo HUB v26 (All-in-One) siap digunakan!")
