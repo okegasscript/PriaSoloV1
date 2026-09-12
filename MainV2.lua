@@ -2267,19 +2267,14 @@ ASettings:Paragraph({
 Anubis_StatusLabel = TabAnubis:Paragraph({ Title = "Status", Desc = "Status: Stopped" })
 
 ASettings:Button({ Title = "🔄 Refresh Data", Justify = "Center", Callback = function()
-    cachedFarm = nil                          -- paksa redeteksi
-    local plants = getPlantsPhysical()         -- deteksi SEKARANG (berdiri di garden-mu)
-    if not plants then
-        warn("❌ Farm belum terdeteksi! Berdiri di garden-mu lalu klik Refresh lagi.")
-        return
-    end
-    rebuildPetCaches()
-    safeCall(Anubis_DD_Anubis, "Refresh", FavOptionsCache)
-    safeCall(Anubis_DD_Cornling, "Refresh", FavOptionsCache)
-    safeCall(Anubis_DD_Frog, "Refresh", FavOptionsCache)
-    safeCall(Anubis_DD_Target, "Refresh", NonFavOptionsCache)
-    safeCall(Anubis_DD_Tree, "Refresh", getTreeList())
-    print("✅ Data Anubis di-refresh! Farm: " .. cachedFarm.Name)
+cachedFarm = nil -- paksa redeteksi, berdiri di garden-mu dulu
+rebuildPetCaches()
+safeCall(Anubis_DD_Anubis, "Refresh", FavOptionsCache)
+safeCall(Anubis_DD_Cornling, "Refresh", FavOptionsCache)
+safeCall(Anubis_DD_Frog, "Refresh", FavOptionsCache)
+safeCall(Anubis_DD_Target, "Refresh", NonFavOptionsCache)
+safeCall(Anubis_DD_Tree, "Refresh", getTreeList())
+print("✅ Data Anubis di-refresh!")
 end })
 
 local AConfigSec = TabAnubis:Section({ Title = "Config" })
