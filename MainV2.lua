@@ -35,7 +35,7 @@ local MyConfig = nil
 local AnubisConfig = nil
 local Anubis_AutoToggle, Anubis_AutoBuyToggle, Anubis_StatusLabel
 local Anubis_DD_Anubis, Anubis_DD_Cornling, Anubis_DD_Frog, Anubis_DD_Target, Anubis_DD_Tree
-local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold
+local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold, Anubis_IN_ShovelDelay
 local Shark_DD_Shark, Shark_DD_Target, Shark_DD_Mutasi, Shark_DD_Tumbal
 local AL_DD_Tim, AL_DD_Target, AL_IN_TargetLevel
 local PNP_DD_Tim
@@ -616,6 +616,35 @@ local ANUBIS_TIMEOUT_SECONDS = 60
 local ANUBIS_WAIT_MUTATION_THRESHOLD = 10   -- ambang "sisa buah > 10"
 local SHOVEL_MAX_PASSES = 6
 
+-- Kecepatan shovel (detik)
+local SHOVEL_DELAY_PER_FRUIT = 0.10
+local SHOVEL_DELAY_PER_PASS  = 0.20
+
+-- Persisten via FILE (bukan WindUI config)
+local SHOVEL_DELAY_FILE = "PriaSoloHUB/shovel_delay.txt"
+
+local function SaveShovelDelay()
+    pcall(function()
+        if type(isfolder) == "function" and not isfolder("PriaSoloHUB") then
+            makefolder("PriaSoloHUB")
+        end
+        writefile(SHOVEL_DELAY_FILE, tostring(SHOVEL_DELAY_PER_FRUIT))
+    end)
+end
+
+local function LoadShovelDelay()
+    local exists = false
+    pcall(function() exists = (type(isfile) == "function" and isfile(SHOVEL_DELAY_FILE) == true) end)
+    if not exists then return false end
+    local v = nil
+    pcall(function() v = tonumber(readfile(SHOVEL_DELAY_FILE)) end)
+    if v then
+        SHOVEL_DELAY_PER_FRUIT = math.clamp(v, 0.03, 0.50)
+        return true
+    end
+    return false
+end
+
 local function debugStep(msg)
     print("🐾 [AutoLevelingAnubis] " .. msg)
 end
@@ -733,19 +762,24 @@ local function stopAutoBuyFavoriteTool()
     print("⏹️ Auto Buy Favorite Tool dihentikan.")
 end
 
-local function shovelFruitsOnTree(treeName, threshold)
+local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
     if not RemoveItemRemote then
         warn("⚠️ Remove_Item remote tidak ditemukan.")
         return
     end
+    perFruitDelay = tonumber(perFruitDelay) or SHOVEL_DELAY_PER_FRUIT
+
     local shovel = equipToolByPrefix("Shovel [Destroy Plants]")
     if not shovel then return end
-    debugStep("Shovel di-equip")
+    debugStep("Shovel di-equip (delay: " .. perFruitDelay .. "s, burst 5)")
+
+    local backoff = 1
 
     for pass = 1, SHOVEL_MAX_PASSES do
+        if not anubisLevelingRunning then break end
+
         local toShovel = {}
         for _, p in ipairs(scanFruitsOnTree(treeName)) do
-            -- hanya buah sungguhan, bukan favorit, mutasi di bawah threshold
             if p.isFruit ~= false and not isFavoriteMarked(p.instance)
                 and p.mutCount < threshold then
                 table.insert(toShovel, p.instance)
@@ -753,12 +787,33 @@ local function shovelFruitsOnTree(treeName, threshold)
         end
         if #toShovel == 0 then break end
 
-        debugStep("Pass " .. pass .. ": " .. #toShovel .. " buah < " .. threshold)
-        for _, fruit in ipairs(toShovel) do
+        local before = #toShovel
+        debugStep("Pass " .. pass .. ": " .. before .. " buah < " .. threshold
+            .. " (backoff x" .. backoff .. ")")
+
+        for i, fruit in ipairs(toShovel) do
+            if not anubisLevelingRunning then break end
             pcall(function() RemoveItemRemote:FireServer(fruit) end)
-            task.wait(0.3)
+            if i % 5 == 0 and i < #toShovel then
+                task.wait(perFruitDelay * backoff)
+            end
         end
-        task.wait(0.7)
+
+        task.wait(SHOVEL_DELAY_PER_PASS * backoff)
+
+        local stillRemaining = 0
+        for _, p in ipairs(scanFruitsOnTree(treeName)) do
+            if p.isFruit ~= false and not isFavoriteMarked(p.instance)
+                and p.mutCount < threshold then
+                stillRemaining = stillRemaining + 1
+            end
+        end
+        if stillRemaining >= before then
+            backoff = math.min(backoff * 2, 4)
+            debugStep("Shovel di-throttle, backoff -> x" .. backoff)
+        else
+            backoff = 1
+        end
     end
 
     local backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -2079,6 +2134,19 @@ Anubis_IN_Threshold = ASettings:Input({
     end
 })
 
+Anubis_IN_ShovelDelay = ASettings:Input({
+    Title = "Shovel Delay per Buah (detik)",
+    Value = tostring(SHOVEL_DELAY_PER_FRUIT),
+    Placeholder = "0.03 - 0.50",
+    Flag = "anubis_shovel_delay",
+    Callback = function(value)
+        local d = tonumber(value) or 0.10
+        SHOVEL_DELAY_PER_FRUIT = math.clamp(d, 0.03, 0.50)
+        SaveShovelDelay()
+        debugStep("Shovel delay diset: " .. SHOVEL_DELAY_PER_FRUIT .. "s")
+    end
+})
+
 ASettings:Space()
 ASettings:Paragraph({
     Title = "Info Webhook",
@@ -2224,6 +2292,12 @@ pcall(applySharkUIFromConfig)
 pcall(applyLevelingUIFromConfig)
 pcall(applyPNPUIFromConfig)
 pcall(applyAnubisUIFromConfig)
+
+-- Muat shovel delay dari FILE & tampilkan di UI
+if LoadShovelDelay() then
+    safeCall(Anubis_IN_ShovelDelay, "SetValue", tostring(SHOVEL_DELAY_PER_FRUIT))
+    print("✅ Shovel delay dimuat dari file: " .. SHOVEL_DELAY_PER_FRUIT .. "s")
+end
 
 pcall(function() MyConfig:Save() end)
 pcall(function() AnubisConfig:Save() end)
