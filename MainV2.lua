@@ -1,3 +1,4 @@
+local ok, err = pcall(function()
 -- ============================================================
 -- PRIA SOLO HUB - ALL IN ONE FINAL (v4)
 -- Tab : Auto Shark | Auto Leveling | Auto Leveling Anubis | PNP | Webhook
@@ -2329,3 +2330,10 @@ if MyConfig:Get("is_leveling_running") then task.delay(1, startAutoLeveling) end
 if MyConfig:Get("is_pnp_running") then task.delay(1, startPNP) end
 
 print("✅ Pria Solo HUB (All-in-One Final v4) siap digunakan!")
+
+    -- ===== PASTE SELURUH SCRIPT v4 DI SINI =====
+end)
+if not ok then
+    warn("[PSHB ERROR] " .. tostring(err))
+    print(debug.traceback(err))
+end
