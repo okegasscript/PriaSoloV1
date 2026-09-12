@@ -35,7 +35,7 @@ local MyConfig = nil
 local AnubisConfig = nil
 local Anubis_AutoToggle, Anubis_AutoBuyToggle, Anubis_StatusLabel
 local Anubis_DD_Anubis, Anubis_DD_Cornling, Anubis_DD_Frog, Anubis_DD_Target, Anubis_DD_Tree
-local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold
+local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold, Anubis_IN_ShovelDelay
 local Shark_DD_Shark, Shark_DD_Target, Shark_DD_Mutasi, Shark_DD_Tumbal
 local AL_DD_Tim, AL_DD_Target, AL_IN_TargetLevel
 local PNP_DD_Tim
@@ -733,16 +733,27 @@ local function stopAutoBuyFavoriteTool()
     print("⏹️ Auto Buy Favorite Tool dihentikan.")
 end
 
-local function shovelFruitsOnTree(treeName, threshold)
+-- Kecepatan shovel (detik) — letakkan 2 baris ini tepat DI ATAS fungsi,
+-- sejajar dengan konstanta SHOVEL_MAX_PASSES
+local SHOVEL_DELAY_PER_FRUIT = 0.10
+local SHOVEL_DELAY_PER_PASS  = 0.20
+
+local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
     if not RemoveItemRemote then
         warn("⚠️ Remove_Item remote tidak ditemukan.")
         return
     end
+    perFruitDelay = tonumber(perFruitDelay) or SHOVEL_DELAY_PER_FRUIT
+
     local shovel = equipToolByPrefix("Shovel [Destroy Plants]")
     if not shovel then return end
-    debugStep("Shovel di-equip")
+    debugStep("Shovel di-equip (delay: " .. perFruitDelay .. "s, burst 5)")
+
+    local backoff = 1 -- naik otomatis kalau server mulai menolak request
 
     for pass = 1, SHOVEL_MAX_PASSES do
+        if not anubisLevelingRunning then break end
+
         local toShovel = {}
         for _, p in ipairs(scanFruitsOnTree(treeName)) do
             -- hanya buah sungguhan, bukan favorit, mutasi di bawah threshold
@@ -753,12 +764,35 @@ local function shovelFruitsOnTree(treeName, threshold)
         end
         if #toShovel == 0 then break end
 
-        debugStep("Pass " .. pass .. ": " .. #toShovel .. " buah < " .. threshold)
-        for _, fruit in ipairs(toShovel) do
+        local before = #toShovel
+        debugStep("Pass " .. pass .. ": " .. before .. " buah < " .. threshold
+            .. " (backoff x" .. backoff .. ")")
+
+        for i, fruit in ipairs(toShovel) do
+            if not anubisLevelingRunning then break end
             pcall(function() RemoveItemRemote:FireServer(fruit) end)
-            task.wait(0.3)
+            -- BURST: jeda hanya tiap 5 buah, bukan per buah
+            if i % 5 == 0 and i < #toShovel then
+                task.wait(perFruitDelay * backoff)
+            end
         end
-        task.wait(0.7)
+
+        task.wait(SHOVEL_DELAY_PER_PASS * backoff)
+
+        -- Backoff: kalau sisa tidak berkurang, server men-throttle -> perlambat
+        local stillRemaining = 0
+        for _, p in ipairs(scanFruitsOnTree(treeName)) do
+            if p.isFruit ~= false and not isFavoriteMarked(p.instance)
+                and p.mutCount < threshold then
+                stillRemaining = stillRemaining + 1
+            end
+        end
+        if stillRemaining >= before then
+            backoff = math.min(backoff * 2, 4)
+            debugStep("Shovel di-throttle, backoff -> x" .. backoff)
+        else
+            backoff = 1
+        end
     end
 
     local backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -2079,6 +2113,20 @@ Anubis_IN_Threshold = ASettings:Input({
     end
 })
 
+Anubis_IN_ShovelDelay = ASettings:Input({
+    Title = "Shovel Delay per Buah (detik)",
+    Value = tostring(AnubisConfig:Get("anubis_shovel_delay") or 0.10),
+    Placeholder = "0.03 - 0.50",
+    Flag = "anubis_shovel_delay",
+    Callback = function(value)
+        local d = tonumber(value) or 0.10
+        SHOVEL_DELAY_PER_FRUIT = math.clamp(d, 0.03, 0.50)
+        AnubisConfig:Set("anubis_shovel_delay", SHOVEL_DELAY_PER_FRUIT)
+        pcall(function() AnubisConfig:Save() end)
+        debugStep("Shovel delay diset: " .. SHOVEL_DELAY_PER_FRUIT .. "s")
+    end
+})
+
 ASettings:Space()
 ASettings:Paragraph({
     Title = "Info Webhook",
@@ -2120,9 +2168,15 @@ AConfigSec:Button({ Title = "Muat Konfigurasi", Justify = "Center", Callback = f
     currentTargetLevel = tonumber(AnubisConfig:Get("anubis_target_level")) or 500
     currentMutationCount = tonumber(AnubisConfig:Get("anubis_mutation_count")) or 1
     currentCollectThreshold = tonumber(AnubisConfig:Get("anubis_collect_threshold")) or 10
+
+    -- BARU: terapkan juga shovel delay tersimpan
+    local savedShovelDelay = tonumber(AnubisConfig:Get("anubis_shovel_delay"))
+    if savedShovelDelay then
+        SHOVEL_DELAY_PER_FRUIT = math.clamp(savedShovelDelay, 0.03, 0.50)
+    end
+
     print("✅ Konfigurasi Anubis dimuat!")
 end })
-
 -- ------------- TAB PNP -------------
 local TabPNP = Window:Tab({ Title = "PNP", Icon = "solar:refresh-bold" })
 local PNPSettings = TabPNP:Section({ Title = "PNP Settings" })
