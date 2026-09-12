@@ -356,12 +356,123 @@ local espFolder = nil
 local espObjects = {}
 local espConnection = nil
 
-local function getPlantsPhysical()
+-- ==== DETEKSI FARM MILIK SENDIRI (multi-strategi) ====
+local cachedFarm = nil
+local FARM_OVERRIDE_NAME = nil -- isi "nama-nya" (string) untuk paksa farm tertentu, kalau auto-gagal
+
+local function farmHasPlants(container)
+    local imp = container and container:FindFirstChild("Important")
+    return imp and imp:FindFirstChild("Plants_Physical") and true or false
+end
+
+local function farmCenter(container)
+    if container:IsA("Model") then
+        local ok, cf, _size = pcall(container.GetBoundingBox, container)
+        if ok and cf then return cf.Position end
+    end
+    local ok2, pivot = pcall(function() return container:GetPivot().Position end)
+    if ok2 and pivot then return pivot end
+    return nil
+end
+
+local function getFarmRoot()
     local p = Workspace:FindFirstChild("Farm")
-    p = p and p:FindFirstChild("Farm")
-    p = p and p:FindFirstChild("Important")
-    p = p and p:FindFirstChild("Plants_Physical")
+    if not p then return nil end
+    -- kadang struktur bersarang dua kali (Farm.Farm)
+    if not p:FindFirstChild("Important") and p:FindFirstChild("Farm") then
+        return p -- root tetap "Farm" luar, child yang dicek per-petak
+    end
     return p
+end
+
+local function detectMyFarm()
+    local root = Workspace:FindFirstChild("Farm")
+    if not root then return nil end
+
+    -- Kumpulkan kandidat: semua child yang punya Plants_Physical
+    local candidates = {}
+    for _, child in ipairs(root:GetChildren()) do
+        if child:IsA("Model") or child:IsA("Folder") then
+            if farmHasPlants(child) then
+                table.insert(candidates, child)
+            end
+        end
+    end
+    if #candidates == 0 then return nil end
+    if #candidates == 1 then return candidates[1] end
+
+    -- Override manual
+    if FARM_OVERRIDE_NAME then
+        local ov = root:FindFirstChild(FARM_OVERRIDE_NAME)
+        if ov and farmHasPlants(ov) then return ov end
+    end
+
+    -- 1) Child bernama sama dengan username pemain
+    local byName = root:FindFirstChild(LocalPlayer.Name)
+    if byName and farmHasPlants(byName) then return byName end
+
+    -- 2) Atribut owner (Owner / OwnerName / OwnerId / UserId) pada child / Important
+    for _, child in ipairs(candidates) do
+        local a1 = child:GetAttributes()
+        if a1.Owner == LocalPlayer.Name or a1.OwnerName == LocalPlayer.Name
+            or a1.OwnerId == LocalPlayer.UserId or a1.UserId == LocalPlayer.UserId then
+            return child
+        end
+        local imp = child:FindFirstChild("Important")
+        if imp then
+            local a2 = imp:GetAttributes()
+            if a2.Owner == LocalPlayer.Name or a2.OwnerId == LocalPlayer.UserId
+                or a2.UserId == LocalPlayer.UserId then
+                return child
+            end
+        end
+    end
+
+    -- 3) Value object "Owner" di dalam child
+    for _, child in ipairs(candidates) do
+        local ov = child:FindFirstChild("Owner")
+        if ov then
+            if ov:IsA("StringValue") and ov.Value == LocalPlayer.Name then return child end
+            if ov:IsA("ObjectValue") and ov.Value == LocalPlayer then return child end
+            if ov:IsA("IntValue") and ov.Value == LocalPlayer.UserId then return child end
+        end
+    end
+
+    -- 4) Posisi: farm terdekat dari posisi karakter saat ini
+    --    (pemain biasanya berdiri di garden-nya sendiri)
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local best, bestDist = nil, math.huge
+        for _, child in ipairs(candidates) do
+            local c = farmCenter(child)
+            if c then
+                local d = (c - hrp.Position).Magnitude
+                if d < bestDist then best, bestDist = child, d end
+            end
+        end
+        if best and bestDist < 200 then return best end
+    end
+
+    -- 5) Fallback jalur lama (workspace.Farm.Farm)
+    local legacy = root:FindFirstChild("Farm")
+    if legacy and farmHasPlants(legacy) then return legacy end
+
+    return candidates[1]
+end
+
+local function getPlantsPhysical()
+    if not cachedFarm or not cachedFarm.Parent then
+        cachedFarm = detectMyFarm()
+        if cachedFarm then
+            print("🏡 Farm terdeteksi: " .. cachedFarm.Name)
+        else
+            warn("❌ Farm milikmu tidak terdeteksi. Berdiri di garden-mu lalu klik Refresh Data.")
+        end
+    end
+    if not cachedFarm then return nil end
+    local imp = cachedFarm:FindFirstChild("Important")
+    return imp and imp:FindFirstChild("Plants_Physical")
 end
 
 local function collectMutations(obj)
@@ -2156,13 +2267,19 @@ ASettings:Paragraph({
 Anubis_StatusLabel = TabAnubis:Paragraph({ Title = "Status", Desc = "Status: Stopped" })
 
 ASettings:Button({ Title = "🔄 Refresh Data", Justify = "Center", Callback = function()
+    cachedFarm = nil                          -- paksa redeteksi
+    local plants = getPlantsPhysical()         -- deteksi SEKARANG (berdiri di garden-mu)
+    if not plants then
+        warn("❌ Farm belum terdeteksi! Berdiri di garden-mu lalu klik Refresh lagi.")
+        return
+    end
     rebuildPetCaches()
     safeCall(Anubis_DD_Anubis, "Refresh", FavOptionsCache)
     safeCall(Anubis_DD_Cornling, "Refresh", FavOptionsCache)
     safeCall(Anubis_DD_Frog, "Refresh", FavOptionsCache)
     safeCall(Anubis_DD_Target, "Refresh", NonFavOptionsCache)
     safeCall(Anubis_DD_Tree, "Refresh", getTreeList())
-    print("✅ Data Anubis di-refresh!")
+    print("✅ Data Anubis di-refresh! Farm: " .. cachedFarm.Name)
 end })
 
 local AConfigSec = TabAnubis:Section({ Title = "Config" })
