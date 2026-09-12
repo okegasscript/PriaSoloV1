@@ -356,12 +356,87 @@ local espFolder = nil
 local espObjects = {}
 local espConnection = nil
 
+-- ==== DETEKSI FARM MILIK SENDIRI (versi single-function) ====
+local cachedFarm = nil
+
 local function getPlantsPhysical()
-    local p = Workspace:FindFirstChild("Farm")
-    p = p and p:FindFirstChild("Farm")
-    p = p and p:FindFirstChild("Important")
-    p = p and p:FindFirstChild("Plants_Physical")
-    return p
+    local root = Workspace:FindFirstChild("Farm")
+    if not root then return nil end
+
+    -- Struktur tunggal ala lama: Farm.Farm.Important.Plants_Physical
+    local rootChild = root:FindFirstChild("Farm")
+    if rootChild then
+        local imp2 = rootChild:FindFirstChild("Important")
+        if imp2 and imp2:FindFirstChild("Plants_Physical") then
+            local others = 0
+            for _, c in ipairs(root:GetChildren()) do
+                if c ~= rootChild then
+                    local i = c:FindFirstChild("Important")
+                    if i and i:FindFirstChild("Plants_Physical") then others = others + 1 end
+                end
+            end
+            if others == 0 then
+                if cachedFarm ~= rootChild then
+                    print("🏡 Farm terdeteksi: " .. rootChild.Name)
+                    cachedFarm = rootChild
+                end
+                return imp2:FindFirstChild("Plants_Physical")
+            end
+        end
+    end
+
+    -- Multi-farm: kumpulkan kandidat
+    local candidates = {}
+    for _, child in ipairs(root:GetChildren()) do
+        local imp = child:FindFirstChild("Important")
+        if imp and imp:FindFirstChild("Plants_Physical") then
+            table.insert(candidates, child)
+        end
+    end
+    if #candidates == 0 then
+        warn("❌ Plants_Physical tidak ditemukan di mana pun.")
+        return nil
+    end
+    if #candidates == 1 then
+        if cachedFarm ~= candidates[1] then
+            print("🏡 Farm terdeteksi: " .. candidates[1].Name)
+            cachedFarm = candidates[1]
+        end
+        return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
+    end
+
+    -- >1 farm: cari milikmu (nama == username, atau farm terdekat dari posisi kamu)
+    local best = nil
+    best = root:FindFirstChild(LocalPlayer.Name)
+    if best then
+        local imp = best:FindFirstChild("Important")
+        if not (imp and imp:FindFirstChild("Plants_Physical")) then best = nil end
+    end
+    if not best then
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local bestDist = math.huge
+            for _, child in ipairs(candidates) do
+                local okp, pos = pcall(function() return child:GetPivot().Position end)
+                if okp and pos then
+                    local d = (pos - hrp.Position).Magnitude
+                    if d < bestDist then bestDist = d; best = child end
+                end
+            end
+            if best and bestDist > 200 then best = nil end
+        end
+    end
+    if not best then
+        warn("⚠️ Farm milikmu belum pasti. Berdiri di garden-mu lalu klik Refresh Data.")
+        best = candidates[1]
+    end
+    if cachedFarm ~= best then
+        print("🏡 Farm terdeteksi: " .. best.Name)
+        cachedFarm = best
+    end
+    local imp = best:FindFirstChild("Important")
+    return imp and imp:FindFirstChild("Plants_Physical")
 end
 
 local function collectMutations(obj)
