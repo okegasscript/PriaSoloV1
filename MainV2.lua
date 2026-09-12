@@ -881,6 +881,29 @@ local function stopLevelingAnubis()
     debugStep("⏹️ STOP")
 end
 
+-- ============================================================
+-- BARU: unfavorite SEMUA buah favorit yang tertinggal di pohon target
+-- Dipakai di Langkah 1 agar unfav tetap jalan walau referensi in-memory
+-- nil / stale (contoh: favorit dari sesi eksekusi sebelumnya).
+-- onlyMutCount = nil -> unfav SEMUA favorit di pohon tsb
+-- onlyMutCount = angka -> hanya buah dengan mutasi persis segitu (mis. 110)
+-- ============================================================
+local function unfavoriteAllFavoritesOnTree(treeName, onlyMutCount)
+    local count = 0
+    for _, p in ipairs(scanFruitsOnTree(treeName)) do
+        if not anubisLevelingRunning then break end
+        if p.isFruit ~= false and isFavoriteMarked(p.instance) then
+            if onlyMutCount == nil or p.mutCount == onlyMutCount then
+                if setFruitFavorite(p.instance, false) then
+                    count = count + 1
+                end
+                task.wait(0.3)
+            end
+        end
+    end
+    return count
+end
+
 local function startLevelingAnubis()
     if anubisLevelingRunning then return end
 
@@ -914,7 +937,6 @@ local function startLevelingAnubis()
                 if currentLevel >= targetLevel then
                     debugStep("Target sudah level " .. currentLevel .. ", lewati.")
                     unequipPetByUUID(targetUUID)
-                    -- Tim Anubis tetap terpasang
                 else
                     local favoritedFruitInstance = nil
                     local targetStartTime = tick()
@@ -926,10 +948,24 @@ local function startLevelingAnubis()
                             -- SIKLUS PERSIAPAN PENUH
                             -- ==========================================
 
-                            -- LANGKAH 1
-                            anubisSetStatus("Status: Bersihkan buah target sebelumnya...")
+                            -- LANGKAH 1 (REVISI): unfavorite buah target lama
+                            anubisSetStatus("Status: Unfavorite buah target sebelumnya...")
+
+                            -- 1a) lepas buah yang masih direferensikan script
                             unfavoritePreviousTargetFruit(favoritedFruitInstance)
                             favoritedFruitInstance = nil
+                            if not anubisLevelingRunning then break end
+
+                            -- 1b) BARU: scan pohon target, unfavorite SEMUA sisa buah
+                            --     favorit (termasuk warisan sesi/eksekusi sebelumnya).
+                            --     Dijalankan SEBELUM Frog & Cornling.
+                            anubisSetStatus("Status: Scan sisa buah favorit di pohon...")
+                            local leftover = unfavoriteAllFavoritesOnTree(tree, nil)
+                            if leftover > 0 then
+                                debugStep("Langkah 1b: " .. leftover
+                                    .. " buah favorit sisa di pohon '" .. tree .. "' di-unfavorite")
+                                task.wait(0.5)
+                            end
                             if not anubisLevelingRunning then break end
 
                             -- LANGKAH 2 : CLEAR GARDEN -> EQUIP FROG
@@ -986,6 +1022,8 @@ local function startLevelingAnubis()
                             if matched then
                                 setFruitFavorite(matched.instance, true)
                                 favoritedFruitInstance = matched.instance
+                                debugStep("Buah target difavoritkan: " .. matched.name
+                                    .. " (" .. matched.mutCount .. " mutasi)")
                             else
                                 debugStep("Tidak ada buah tepat " .. mutationCount .. " mutasi")
                             end
@@ -1074,7 +1112,6 @@ local function startLevelingAnubis()
                         -- ===============================================
 
                         if reachedDuringAnubis then
-                            -- Target selesai -> unequip TARGET saja
                             debugStep("✅ Level tercapai! Unequip TARGET saja, Anubis tetap terpasang.")
                             sendTargetReachedWebhook(getPetByUUID(targetUUID), targetUUID,
                                 targetLevel, tick() - targetStartTime)
@@ -1112,7 +1149,6 @@ local function startLevelingAnubis()
                 end
             end
 
-            -- Semua target selesai / dihentikan -> baru lepas Tim Anubis
             if anubisEquipped then
                 debugStep("Semua target selesai, unequip Tim Anubis.")
                 for _, uuid in ipairs(anubis) do unequipPetByUUID(uuid) end
