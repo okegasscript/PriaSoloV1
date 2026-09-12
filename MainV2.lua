@@ -1,14 +1,8 @@
 -- ============================================================
--- PRIA SOLO HUB - ALL IN ONE FINAL (v3)
+-- PRIA SOLO HUB - ALL IN ONE FINAL (v4)
 -- Tab : Auto Shark | Auto Leveling | Auto Leveling Anubis | PNP | Webhook
--- Notes:
---   - DataPetModule: SATU SUMBER (PriaSoloV1)
---   - Webhook: satu settingan (tab Webhook, dipakai semua fitur)
---   - Anubis: unfav SEMUA sisa buah favorit di pohon target SEBELUM Frog/Cornling (Langkah 1b)
---   - Anubis: penghitung sisa buah MENGABAIKAN buah favorit & entry pohon
---   - Anubis: target selesai -> unequip TARGET saja, Tim Anubis tetap (fast-swap)
---   - Shovel cepat: burst tiap 5 buah + backoff otomatis + delay bisa diatur UI & tersimpan
---   - Semua state Anubis (termasuk shovel delay) di-apply saat startup & Muat Konfigurasi
+-- Anubis save state: file JSON sendiri (PriaSoloHUB/anubis_state.json),
+-- auto-save tiap perubahan, auto-load saat startup. Anti reset.
 -- ============================================================
 
 -- ================= SERVICES =================
@@ -59,7 +53,7 @@ end
 local WindUI = loadWindUI()
 if not WindUI then error("Gagal memuat WindUI!") end
 
--- ================= LOAD DATAPETMODULE (SATU SUMBER: V1) =================
+-- ================= LOAD DATAPETMODULE =================
 local DataPetModule
 pcall(function()
     DataPetModule = loadstring(game:HttpGet(
@@ -300,7 +294,7 @@ local function createConfigObject(name)
 end
 
 MyConfig = createConfigObject("AutoSharkConfig")
-AnubisConfig = createConfigObject("PriaSoloConfig")
+AnubisConfig = createConfigObject("PriaSoloConfig") -- hanya untuk migrasi data lama
 pcall(function() MyConfig:Load() end)
 
 -- ================= FARMESP (EMBEDDED) =================
@@ -385,8 +379,8 @@ local function resolvePart(inst)
     return nil
 end
 
--- isFruit = true  -> buah sungguhan (folder Fruits / Fruit_Spawn)
--- isFruit = false -> entry pohon/tanaman (TIDAK dihitung sebagai buah)
+-- isFruit = true  -> buah sungguhan
+-- isFruit = false -> entry pohon/tanaman
 local function scanFruitEntry(plantFolder, fruit, index, isFruit)
     local muts = collectMutations(fruit)
     for _, desc in ipairs(fruit:GetDescendants()) do
@@ -550,7 +544,6 @@ local function scanFruitsOnTree(treeName)
     return result
 end
 
--- Deteksi buah favorit (nama atribut bisa beda tiap update game).
 local FAVORITE_ATTR_NAMES = { "Favorite", "Favorited", "IsFavorite", "Favourite", "isFavorite" }
 
 local function isFavoriteMarked(inst)
@@ -579,8 +572,7 @@ local function findFruitOnTreeByExactMutation(treeName, mutationCount)
     return nil
 end
 
--- SATU-SATUNYA penghitung sisa buah.
--- Dihitung HANYA: buah sungguhan, bukan favorit, mutasi > threshold.
+-- Satu-satunya penghitung sisa buah (buah sungguhan, bukan favorit, > threshold)
 local function countFruitsOnTreeWithMutationAbove(treeName, threshold, exceptInstance)
     local count = 0
     for _, p in ipairs(scanFruitsOnTree(treeName)) do
@@ -601,6 +593,7 @@ local currentTree = ""
 local currentTargetLevel = 500
 local currentMutationCount = 110
 local currentCollectThreshold = 10
+local currentESPMutation = false
 local suppressToggleCallback = false
 local suppressAutoBuyToggle = false
 local anubisLevelingRunning = false
@@ -613,7 +606,7 @@ local ANUBIS_TIMEOUT_SECONDS = 60
 local ANUBIS_WAIT_MUTATION_THRESHOLD = 10
 local SHOVEL_MAX_PASSES = 6
 
--- Kecepatan shovel (detik), bisa diubah dari UI & tersimpan di config
+-- Kecepatan shovel (detik)
 local SHOVEL_DELAY_PER_FRUIT = 0.10
 local SHOVEL_DELAY_PER_PASS  = 0.20
 
@@ -623,6 +616,112 @@ end
 
 local function anubisSetStatus(txt)
     if Anubis_StatusLabel then pcall(function() Anubis_StatusLabel:SetDesc(txt) end) end
+end
+
+-- ============================================================
+-- ANUBIS PERSISTENCE (FILE-BASED - bukan WindUI config)
+-- ============================================================
+local ANUBIS_SAVE_FILE = "PriaSoloHUB/anubis_state.json"
+
+local function hasFileAPI()
+    return type(writefile) == "function" and type(readfile) == "function"
+end
+
+local function ensureSaveFolder()
+    pcall(function()
+        if type(isfolder) == "function" and type(makefolder) == "function" then
+            if not isfolder("PriaSoloHUB") then makefolder("PriaSoloHUB") end
+        end
+    end)
+end
+
+local function ReadAnubisSaveTable()
+    if not hasFileAPI() then return nil end
+    local fileExists = false
+    pcall(function() fileExists = (isfile(ANUBIS_SAVE_FILE) == true) end)
+    if not fileExists then return nil end
+    local ok, data = pcall(function()
+        return HttpService:JSONDecode(readfile(ANUBIS_SAVE_FILE))
+    end)
+    if ok and type(data) == "table" then return data end
+    return nil
+end
+
+local function SaveAnubisState()
+    if not hasFileAPI() then return end
+    ensureSaveFolder()
+    local data = {
+        anubis_tim_anubis        = currentAnubis or {},
+        anubis_tim_cornling      = currentCornling or {},
+        anubis_tim_frog          = currentFrog or {},
+        anubis_target_leveling   = currentTargets or {},
+        anubis_selected_tree     = currentTree or "",
+        anubis_target_level      = currentTargetLevel or 500,
+        anubis_mutation_count    = currentMutationCount or 110,
+        anubis_collect_threshold = currentCollectThreshold or 10,
+        anubis_shovel_delay      = SHOVEL_DELAY_PER_FRUIT or 0.10,
+        anubis_esp_mutation      = currentESPMutation == true,
+        saved_at                 = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    }
+    local ok, err = pcall(function()
+        writefile(ANUBIS_SAVE_FILE, HttpService:JSONEncode(data))
+    end)
+    if not ok then warn("⚠️ Gagal menyimpan state Anubis: " .. tostring(err)) end
+end
+
+local function LoadAnubisState()
+    local data = ReadAnubisSaveTable()
+
+    -- Migrasi: file belum ada -> coba ambil dari config WindUI lama
+    if type(data) ~= "table" then
+        pcall(function() AnubisConfig:Load() end)
+        data = {
+            anubis_tim_anubis        = AnubisConfig:Get("anubis_tim_anubis"),
+            anubis_tim_cornling      = AnubisConfig:Get("anubis_tim_cornling"),
+            anubis_tim_frog          = AnubisConfig:Get("anubis_tim_frog"),
+            anubis_target_leveling   = AnubisConfig:Get("anubis_target_leveling"),
+            anubis_selected_tree     = AnubisConfig:Get("anubis_selected_tree"),
+            anubis_target_level      = AnubisConfig:Get("anubis_target_level"),
+            anubis_mutation_count    = AnubisConfig:Get("anubis_mutation_count"),
+            anubis_collect_threshold = AnubisConfig:Get("anubis_collect_threshold"),
+            anubis_shovel_delay      = AnubisConfig:Get("anubis_shovel_delay"),
+            anubis_esp_mutation      = AnubisConfig:Get("anubis_esp_mutation"),
+        }
+    end
+
+    currentAnubis          = normalizeUUIDList(data.anubis_tim_anubis or {})
+    currentCornling        = normalizeUUIDList(data.anubis_tim_cornling or {})
+    currentFrog            = normalizeUUIDList(data.anubis_tim_frog or {})
+    currentTargets         = normalizeUUIDList(data.anubis_target_leveling or {})
+    currentTree            = tostring(data.anubis_selected_tree or "")
+    currentTargetLevel     = math.clamp(tonumber(data.anubis_target_level) or 500, 1, 500)
+    currentMutationCount   = math.max(tonumber(data.anubis_mutation_count) or 110, 0)
+    currentCollectThreshold = math.max(tonumber(data.anubis_collect_threshold) or 10, 0)
+    local savedDelay = tonumber(data.anubis_shovel_delay)
+    if savedDelay then
+        SHOVEL_DELAY_PER_FRUIT = math.clamp(savedDelay, 0.03, 0.50)
+    end
+    currentESPMutation = (data.anubis_esp_mutation == true)
+
+    -- Terapkan ke UI
+    safeCall(Anubis_DD_Anubis,     "Select", currentAnubis)
+    safeCall(Anubis_DD_Cornling,   "Select", currentCornling)
+    safeCall(Anubis_DD_Frog,       "Select", currentFrog)
+    safeCall(Anubis_DD_Target,     "Select", currentTargets)
+    if currentTree ~= "" then
+        safeCall(Anubis_DD_Tree, "Select", currentTree)
+    end
+    safeCall(Anubis_IN_TargetLevel, "SetValue", tostring(currentTargetLevel))
+    safeCall(Anubis_IN_MutCount,    "SetValue", tostring(currentMutationCount))
+    safeCall(Anubis_IN_Threshold,   "SetValue", tostring(currentCollectThreshold))
+    safeCall(Anubis_IN_ShovelDelay, "SetValue", tostring(SHOVEL_DELAY_PER_FRUIT))
+    if currentESPMutation then pcall(function() FarmESP.start() end) end
+
+    if ReadAnubisSaveTable() then
+        debugStep("State dimuat dari " .. ANUBIS_SAVE_FILE)
+    else
+        debugStep("State dimuat (migrasi dari config lama / default)")
+    end
 end
 
 local function getTreeList()
@@ -746,14 +845,13 @@ local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
     if not shovel then return end
     debugStep("Shovel di-equip (delay: " .. perFruitDelay .. "s, burst 5)")
 
-    local backoff = 1 -- naik otomatis kalau server mulai menolak request
+    local backoff = 1
 
     for pass = 1, SHOVEL_MAX_PASSES do
         if not anubisLevelingRunning then break end
 
         local toShovel = {}
         for _, p in ipairs(scanFruitsOnTree(treeName)) do
-            -- hanya buah sungguhan, bukan favorit, mutasi di bawah threshold
             if p.isFruit ~= false and not isFavoriteMarked(p.instance)
                 and p.mutCount < threshold then
                 table.insert(toShovel, p.instance)
@@ -768,7 +866,6 @@ local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
         for i, fruit in ipairs(toShovel) do
             if not anubisLevelingRunning then break end
             pcall(function() RemoveItemRemote:FireServer(fruit) end)
-            -- BURST: jeda hanya tiap 5 buah, bukan per buah
             if i % 5 == 0 and i < #toShovel then
                 task.wait(perFruitDelay * backoff)
             end
@@ -776,7 +873,6 @@ local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
 
         task.wait(SHOVEL_DELAY_PER_PASS * backoff)
 
-        -- Deteksi throttle: kalau sisa tidak berkurang, perlambat
         local stillRemaining = 0
         for _, p in ipairs(scanFruitsOnTree(treeName)) do
             if p.isFruit ~= false and not isFavoriteMarked(p.instance)
@@ -903,9 +999,7 @@ local function unfavoritePreviousTargetFruit(previousInstance)
     return success
 end
 
--- unfavorite SEMUA buah favorit yang tertinggal di pohon target
--- (menangkap favorit warisan sesi/eksekusi sebelumnya).
--- onlyMutCount = nil -> unfav SEMUA favorit; angka -> hanya mutasi persis segitu.
+-- unfav SEMUA sisa buah favorit di pohon target (termasuk warisan sesi lama)
 local function unfavoriteAllFavoritesOnTree(treeName, onlyMutCount)
     local count = 0
     for _, p in ipairs(scanFruitsOnTree(treeName)) do
@@ -971,28 +1065,25 @@ local function startLevelingAnubis()
                     while anubisLevelingRunning and currentLevel < targetLevel do
 
                         if not anubisEquipped then
-                            -- ==========================================
                             -- SIKLUS PERSIAPAN PENUH
-                            -- ==========================================
 
-                            -- LANGKAH 1a: unfav buah referensi script (jika ada)
+                            -- LANGKAH 1a
                             anubisSetStatus("Status: Unfavorite buah target sebelumnya...")
                             unfavoritePreviousTargetFruit(favoritedFruitInstance)
                             favoritedFruitInstance = nil
                             if not anubisLevelingRunning then break end
 
-                            -- LANGKAH 1b: scan pohon target, unfav SEMUA sisa favorit
-                            -- (favorit lama pasti lepas SEBELUM Frog/Cornling jalan)
+                            -- LANGKAH 1b
                             anubisSetStatus("Status: Scan sisa buah favorit di pohon...")
                             local leftover = unfavoriteAllFavoritesOnTree(tree, nil)
                             if leftover > 0 then
                                 debugStep("Langkah 1b: " .. leftover
-                                    .. " buah favorit sisa di pohon '" .. tree .. "' di-unfavorite")
+                                    .. " buah favorit sisa di '" .. tree .. "' di-unfavorite")
                                 task.wait(0.5)
                             end
                             if not anubisLevelingRunning then break end
 
-                            -- LANGKAH 2 : CLEAR GARDEN -> EQUIP FROG
+                            -- LANGKAH 2 : Frog
                             anubisSetStatus("Status: Clear Garden + Equip Frog...")
                             debugStep("Langkah 2: ClearGarden sebelum equip Tim Frog")
                             runClearGarden()
@@ -1019,7 +1110,7 @@ local function startLevelingAnubis()
                             task.wait(0.5)
                             if not anubisLevelingRunning then break end
 
-                            -- LANGKAH 3 : CLEAR GARDEN -> EQUIP CORNLING
+                            -- LANGKAH 3 : Cornling
                             anubisSetStatus("Status: Clear Garden + Equip Cornling...")
                             debugStep("Langkah 3: ClearGarden sebelum equip Tim Cornling")
                             runClearGarden()
@@ -1060,7 +1151,7 @@ local function startLevelingAnubis()
                             task.wait(0.5)
                             if not anubisLevelingRunning then break end
 
-                            -- LANGKAH 6 : CLEAR GARDEN -> EQUIP ANUBIS + TARGET
+                            -- LANGKAH 6 : Anubis + Target
                             anubisSetStatus("Status: Clear Garden + Equip Anubis + Target...")
                             debugStep("Langkah 6: ClearGarden sebelum equip Tim Anubis + Target")
                             runClearGarden()
@@ -1073,9 +1164,7 @@ local function startLevelingAnubis()
                             equipPetListTogether(anubisAndTarget)
                             anubisEquipped = true
                         else
-                            -- ==========================================
-                            -- FAST-SWAP: Tim Anubis masih terpasang
-                            -- ==========================================
+                            -- FAST-SWAP
                             anubisSetStatus("Status: Ganti target (Anubis tetap terpasang)...")
                             debugStep("Fast-swap: equip target baru #" .. targetIndex)
                             equipPetByUUID(targetUUID)
@@ -1085,7 +1174,7 @@ local function startLevelingAnubis()
 
                         anubisSetStatus("Status: Equip Anubis + Target...")
 
-                        -- ================= LOOP TUNGGU =================
+                        -- LOOP TUNGGU
                         local anubisStartTime = tick()
                         local reachedDuringAnubis = false
                         local lastDebugAt = 0
@@ -1133,7 +1222,6 @@ local function startLevelingAnubis()
 
                             task.wait(1)
                         end
-                        -- ===============================================
 
                         if reachedDuringAnubis then
                             debugStep("✅ Level tercapai! Unequip TARGET saja, Anubis tetap terpasang.")
@@ -1144,7 +1232,6 @@ local function startLevelingAnubis()
                             break
                         end
 
-                        -- Belum tercapai -> lepas Anubis + target, ulangi siklus penuh
                         local anubisAndTarget = {}
                         for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
                         table.insert(anubisAndTarget, targetUUID)
@@ -1662,7 +1749,7 @@ local function updateTargetLevelingDropdown(targetLevel)
     pcall(function() MyConfig:Save() end)
 end
 
--- ============ APPLY CONFIG FUNCS ============
+-- ============ APPLY CONFIG (SHARK / LEVEL / PNP) ============
 local function applySharkUIFromConfig()
     pcall(function() MyConfig:Load() end)
     safeCall(Shark_DD_Shark, "Select", normalizeUUIDList(MyConfig:Get("tim_shark_uuids") or {}))
@@ -1685,63 +1772,8 @@ local function applyPNPUIFromConfig()
     safeCall(PNP_DD_Tim, "Select", normalizeUUIDList(MyConfig:Get("tim_pnp_uuids") or {}))
 end
 
-local anubisLegacyMap = {
-    { new = "anubis_tim_anubis",        old = "tim_anubis" },
-    { new = "anubis_tim_cornling",      old = "tim_cornling" },
-    { new = "anubis_tim_frog",          old = "tim_frog" },
-    { new = "anubis_target_leveling",   old = "target_leveling" },
-    { new = "anubis_selected_tree",     old = "selected_tree" },
-    { new = "anubis_target_level",      old = "target_level" },
-    { new = "anubis_mutation_count",    old = "mutation_count" },
-    { new = "anubis_collect_threshold", old = "collect_threshold" },
-    { new = "anubis_esp_mutation",      old = "esp_mutation" },
-    { new = "anubis_auto_buy_fav_tool", old = "auto_buy_fav_tool" },
-}
-
-local function applyAnubisVariablesFromConfig()
-    currentAnubis          = normalizeUUIDList(AnubisConfig:Get("anubis_tim_anubis") or {})
-    currentCornling        = normalizeUUIDList(AnubisConfig:Get("anubis_tim_cornling") or {})
-    currentFrog            = normalizeUUIDList(AnubisConfig:Get("anubis_tim_frog") or {})
-    currentTargets         = normalizeUUIDList(AnubisConfig:Get("anubis_target_leveling") or {})
-    currentTree            = tostring(AnubisConfig:Get("anubis_selected_tree") or "")
-    currentTargetLevel     = tonumber(AnubisConfig:Get("anubis_target_level")) or 500
-    currentMutationCount   = tonumber(AnubisConfig:Get("anubis_mutation_count")) or 110
-    currentCollectThreshold = tonumber(AnubisConfig:Get("anubis_collect_threshold")) or 10
-
-    local savedDelay = tonumber(AnubisConfig:Get("anubis_shovel_delay"))
-    if savedDelay then
-        SHOVEL_DELAY_PER_FRUIT = math.clamp(savedDelay, 0.03, 0.50)
-    end
-end
-
-local function applyAnubisUIFromConfig()
-    pcall(function() AnubisConfig:Load() end)
-
-    for _, m in ipairs(anubisLegacyMap) do
-        if AnubisConfig:Get(m.new) == nil then
-            local ov = AnubisConfig:Get(m.old)
-            if ov ~= nil then AnubisConfig:Set(m.new, ov) end
-        end
-    end
-
-    safeCall(Anubis_DD_Anubis,      "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_anubis") or {}))
-    safeCall(Anubis_DD_Cornling,    "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_cornling") or {}))
-    safeCall(Anubis_DD_Frog,        "Select", normalizeUUIDList(AnubisConfig:Get("anubis_tim_frog") or {}))
-    safeCall(Anubis_DD_Target,      "Select", normalizeUUIDList(AnubisConfig:Get("anubis_target_leveling") or {}))
-    safeCall(Anubis_DD_Tree,        "Select", tostring(AnubisConfig:Get("anubis_selected_tree") or ""))
-    safeCall(Anubis_IN_TargetLevel, "SetValue", tostring(AnubisConfig:Get("anubis_target_level") or 500))
-    safeCall(Anubis_IN_MutCount,    "SetValue", tostring(AnubisConfig:Get("anubis_mutation_count") or 110))
-    safeCall(Anubis_IN_Threshold,   "SetValue", tostring(AnubisConfig:Get("anubis_collect_threshold") or 10))
-    safeCall(Anubis_IN_ShovelDelay, "SetValue",
-        tostring(AnubisConfig:Get("anubis_shovel_delay") or SHOVEL_DELAY_PER_FRUIT))
-
-    applyAnubisVariablesFromConfig()
-
-    pcall(function() AnubisConfig:Save() end)
-end
-
 -- ============================================================
--- CACHE DATA PET (ANTI BERAT SAAT START)
+-- CACHE DATA PET
 -- ============================================================
 local FavPetsCache, NonFavPetsCache = {}, {}
 local FavOptionsCache, NonFavOptionsCache, NormalTargetOptionsCache = {}, {}, {}
@@ -2011,10 +2043,12 @@ Anubis_AutoToggle = ASettings:Toggle({
 
 ASettings:Toggle({
     Title = "ESP Mutasi",
-    Value = AnubisConfig:Get("anubis_esp_mutation") or false,
+    Value = currentESPMutation,
     Flag = "anubis_esp_mutation",
     Callback = function(state)
+        currentESPMutation = state
         if state then FarmESP.start() else FarmESP.stop() end
+        SaveAnubisState()
     end
 })
 ASettings:Space()
@@ -2040,6 +2074,7 @@ Anubis_DD_Tree = ASettings:Dropdown({
         elseif type(selected) == "table" and #selected > 0 then val = selected[1] end
         currentTree = tostring(val or "")
         print("🌳 Pohon dipilih:", currentTree)
+        SaveAnubisState()
     end
 })
 ASettings:Space()
@@ -2048,11 +2083,15 @@ Anubis_DD_Frog = ASettings:Dropdown({
     Title = "Pilih Tim Frog / Echo Frog", Multi = true, Search = true, AllowNone = true,
     Values = FavOptionsCache, Value = {},
     Flag = "anubis_tim_frog",
-    Callback = function(selected) currentFrog = normalizeUUIDList(selected) end
+    Callback = function(selected)
+        currentFrog = normalizeUUIDList(selected)
+        SaveAnubisState()
+    end
 })
 ASettings:Button({ Title = "Clear Tim Frog", Justify = "Center", Callback = function()
     safeCall(Anubis_DD_Frog, "Select", {})
     currentFrog = {}
+    SaveAnubisState()
 end })
 ASettings:Space()
 
@@ -2060,11 +2099,15 @@ Anubis_DD_Cornling = ASettings:Dropdown({
     Title = "Pilih Tim Cornling", Multi = true, Search = true, AllowNone = true,
     Values = FavOptionsCache, Value = {},
     Flag = "anubis_tim_cornling",
-    Callback = function(selected) currentCornling = normalizeUUIDList(selected) end
+    Callback = function(selected)
+        currentCornling = normalizeUUIDList(selected)
+        SaveAnubisState()
+    end
 })
 ASettings:Button({ Title = "Clear Tim Cornling", Justify = "Center", Callback = function()
     safeCall(Anubis_DD_Cornling, "Select", {})
     currentCornling = {}
+    SaveAnubisState()
 end })
 ASettings:Space()
 
@@ -2072,11 +2115,15 @@ Anubis_DD_Anubis = ASettings:Dropdown({
     Title = "Pilih Tim Anubis", Multi = true, Search = true, AllowNone = true,
     Values = FavOptionsCache, Value = {},
     Flag = "anubis_tim_anubis",
-    Callback = function(selected) currentAnubis = normalizeUUIDList(selected) end
+    Callback = function(selected)
+        currentAnubis = normalizeUUIDList(selected)
+        SaveAnubisState()
+    end
 })
 ASettings:Button({ Title = "Clear Tim Anubis", Justify = "Center", Callback = function()
     safeCall(Anubis_DD_Anubis, "Select", {})
     currentAnubis = {}
+    SaveAnubisState()
 end })
 ASettings:Space()
 
@@ -2084,54 +2131,61 @@ Anubis_DD_Target = ASettings:Dropdown({
     Title = "Pilih Target Leveling", Multi = true, Search = true, AllowNone = true,
     Values = NonFavOptionsCache, Value = {},
     Flag = "anubis_target_leveling",
-    Callback = function(selected) currentTargets = normalizeUUIDList(selected) end
+    Callback = function(selected)
+        currentTargets = normalizeUUIDList(selected)
+        SaveAnubisState()
+    end
 })
 ASettings:Button({ Title = "Clear Target Leveling", Justify = "Center", Callback = function()
     safeCall(Anubis_DD_Target, "Select", {})
     currentTargets = {}
+    SaveAnubisState()
 end })
 ASettings:Space()
 
 Anubis_IN_TargetLevel = ASettings:Input({
-    Title = "Target Level", Value = tostring(AnubisConfig:Get("anubis_target_level") or 500),
+    Title = "Target Level",
+    Value = "500",
     Placeholder = "1-500",
     Flag = "anubis_target_level",
     Callback = function(value)
         currentTargetLevel = math.clamp(tonumber(value) or 500, 1, 500)
+        SaveAnubisState()
     end
 })
 ASettings:Space()
 
 Anubis_IN_MutCount = ASettings:Input({
     Title = "Jumlah Mutasi (untuk difavoritkan)",
-    Value = tostring(AnubisConfig:Get("anubis_mutation_count") or 110),
+    Value = "110",
     Placeholder = "misal: 110",
     Flag = "anubis_mutation_count",
     Callback = function(value)
         currentMutationCount = math.max(tonumber(value) or 1, 0)
+        SaveAnubisState()
     end
 })
 
 Anubis_IN_Threshold = ASettings:Input({
     Title = "Shovel Buah Dengan Mutasi Dibawah",
-    Value = tostring(AnubisConfig:Get("anubis_collect_threshold") or 10),
+    Value = "10",
     Placeholder = "misal: 10",
     Flag = "anubis_collect_threshold",
     Callback = function(value)
         currentCollectThreshold = math.max(tonumber(value) or 10, 0)
+        SaveAnubisState()
     end
 })
 
 Anubis_IN_ShovelDelay = ASettings:Input({
     Title = "Shovel Delay per Buah (detik)",
-    Value = tostring(AnubisConfig:Get("anubis_shovel_delay") or SHOVEL_DELAY_PER_FRUIT),
+    Value = tostring(SHOVEL_DELAY_PER_FRUIT),
     Placeholder = "0.03 - 0.50",
     Flag = "anubis_shovel_delay",
     Callback = function(value)
         local d = tonumber(value) or 0.10
         SHOVEL_DELAY_PER_FRUIT = math.clamp(d, 0.03, 0.50)
-        AnubisConfig:Set("anubis_shovel_delay", SHOVEL_DELAY_PER_FRUIT)
-        pcall(function() AnubisConfig:Save() end)
+        SaveAnubisState()
         debugStep("Shovel delay diset: " .. SHOVEL_DELAY_PER_FRUIT .. "s")
     end
 })
@@ -2156,21 +2210,12 @@ end })
 
 local AConfigSec = TabAnubis:Section({ Title = "Config" })
 AConfigSec:Button({ Title = "Simpan Konfigurasi", Justify = "Center", Callback = function()
-    AnubisConfig:Set("anubis_tim_anubis", currentAnubis)
-    AnubisConfig:Set("anubis_tim_cornling", currentCornling)
-    AnubisConfig:Set("anubis_tim_frog", currentFrog)
-    AnubisConfig:Set("anubis_target_leveling", currentTargets)
-    AnubisConfig:Set("anubis_selected_tree", currentTree)
-    AnubisConfig:Set("anubis_target_level", currentTargetLevel)
-    AnubisConfig:Set("anubis_mutation_count", currentMutationCount)
-    AnubisConfig:Set("anubis_collect_threshold", currentCollectThreshold)
-    AnubisConfig:Set("anubis_shovel_delay", SHOVEL_DELAY_PER_FRUIT)
-    pcall(function() AnubisConfig:Save() end)
-    print("✅ Konfigurasi Anubis disimpan!")
+    SaveAnubisState()
+    print("✅ State Anubis disimpan ke " .. ANUBIS_SAVE_FILE)
 end })
 AConfigSec:Button({ Title = "Muat Konfigurasi", Justify = "Center", Callback = function()
-    applyAnubisUIFromConfig()
-    print("✅ Konfigurasi Anubis dimuat!")
+    LoadAnubisState()
+    print("✅ State Anubis dimuat!")
 end })
 
 -- ------------- TAB PNP -------------
@@ -2273,13 +2318,14 @@ end })
 pcall(applySharkUIFromConfig)
 pcall(applyLevelingUIFromConfig)
 pcall(applyPNPUIFromConfig)
-pcall(applyAnubisUIFromConfig)   -- <- ini sekarang juga menerapkan shovel delay saat startup
+
+-- Anubis: load state dari FILE (bukan WindUI config)
+pcall(LoadAnubisState)
 
 pcall(function() MyConfig:Save() end)
-pcall(function() AnubisConfig:Save() end)
 
 if MyConfig:Get("is_running") then task.delay(1, startAutoShark) end
 if MyConfig:Get("is_leveling_running") then task.delay(1, startAutoLeveling) end
 if MyConfig:Get("is_pnp_running") then task.delay(1, startPNP) end
 
-print("✅ Pria Solo HUB (All-in-One Final v3) siap digunakan!")
+print("✅ Pria Solo HUB (All-in-One Final v4) siap digunakan!")
