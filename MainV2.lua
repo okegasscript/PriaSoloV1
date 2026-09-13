@@ -400,6 +400,34 @@ local function getPlantsPhysical()
     return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
 end
 
+-- ==== OVERRIDE: deteksi garden milik sendiri (Data.Owner == username) ====
+-- Fungsi lama di atas sengaja TIDAK dihapus; dia otomatis tergantikan
+-- karena semua pemanggil (scanAllPlants, getTreeList, ESP) berada di bawah blok ini.
+local function getPlantsPhysical()
+    local root = Workspace:FindFirstChild("Farm")
+    if not root then return nil end
+    local mine, first = nil, nil
+    for _, child in ipairs(root:GetChildren()) do
+        local imp = child:FindFirstChild("Important")
+        local pp = imp and imp:FindFirstChild("Plants_Physical")
+        if pp then
+            if not first then first = pp end
+            local data = imp:FindFirstChild("Data")
+            local ov = data and data:FindFirstChild("Owner")
+            if ov and ov:IsA("StringValue")
+                and (ov.Value == LocalPlayer.Name or ov.Value == LocalPlayer.DisplayName) then
+                if not mine then
+                    mine = pp
+                    print("[Garden] Kamu terdeteksi (owner): " .. ov.Value)
+                end
+            end
+        end
+    end
+    if mine then return mine end
+    print("[Garden] Owner tidak cocok, memakai garden pertama.")
+    return first
+end
+
 local function collectMutations(obj)
     local muts = {}
     for k, v in pairs(obj:GetAttributes()) do
