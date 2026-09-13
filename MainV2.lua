@@ -356,12 +356,51 @@ local espFolder = nil
 local espObjects = {}
 local espConnection = nil
 
+-- ==== DETEKSI GARDEN MILIK SENDIRI (via Important.Data.Owner == username) ====
+local announcedFarm = nil
+
 local function getPlantsPhysical()
-    local p = Workspace:FindFirstChild("Farm")
-    p = p and p:FindFirstChild("Farm")
-    p = p and p:FindFirstChild("Important")
-    p = p and p:FindFirstChild("Plants_Physical")
-    return p
+    local root = Workspace:FindFirstChild("Farm")
+    if not root then return nil end
+
+    -- Kumpulkan semua garden yang punya Plants_Physical
+    local candidates = {}
+    for _, child in ipairs(root:GetChildren()) do
+        local imp = child:FindFirstChild("Important")
+        if imp and imp:FindFirstChild("Plants_Physical") then
+            table.insert(candidates, child)
+        end
+    end
+    if #candidates == 0 then
+        warn("❌ Plants_Physical tidak ditemukan.")
+        return nil
+    end
+
+    -- Hanya satu garden -> langsung pakai
+    if #candidates == 1 then
+        if announcedFarm ~= candidates[1] then
+            announcedFarm = candidates[1]
+            print("🏡 Garden terdeteksi (satu-satunya): " .. candidates[1].Name)
+        end
+        return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
+    end
+
+    -- Beberapa garden -> pilih yang pemiliknya = username kamu
+    for _, child in ipairs(candidates) do
+        local imp = child:FindFirstChild("Important")
+        local data = imp:FindFirstChild("Data")
+        local ov = data and data:FindFirstChild("Owner")
+        if ov and ov:IsA("StringValue") and ov.Value == LocalPlayer.Name then
+            if announcedFarm ~= child then
+                announcedFarm = child
+                print("🏡 Garden kamu terdeteksi (owner): " .. ov.Value)
+            end
+            return imp:FindFirstChild("Plants_Physical")
+        end
+    end
+
+    warn("⚠️ Garden milikmu tidak ketemu via Owner, memakai garden pertama.")
+    return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
 end
 
 local function collectMutations(obj)
