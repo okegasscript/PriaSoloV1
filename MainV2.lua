@@ -35,7 +35,7 @@ local MyConfig = nil
 local AnubisConfig = nil
 local Anubis_AutoToggle, Anubis_AutoBuyToggle, Anubis_StatusLabel
 local Anubis_DD_Anubis, Anubis_DD_Cornling, Anubis_DD_Frog, Anubis_DD_Target, Anubis_DD_Tree
-local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold, Anubis_IN_ShovelDelay
+local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold
 local Shark_DD_Shark, Shark_DD_Target, Shark_DD_Mutasi, Shark_DD_Tumbal
 local AL_DD_Tim, AL_DD_Target, AL_IN_TargetLevel
 local PNP_DD_Tim
@@ -356,57 +356,12 @@ local espFolder = nil
 local espObjects = {}
 local espConnection = nil
 
--- ==== DETEKSI FARM MILIK SENDIRI (Important.Data.Owner == username) ====
-local cachedFarm = nil
-
 local function getPlantsPhysical()
-    local root = Workspace:FindFirstChild("Farm")
-    if not root then return nil end
-
-    local candidates = {}
-    for _, child in ipairs(root:GetChildren()) do
-        local imp = child:FindFirstChild("Important")
-        if imp and imp:FindFirstChild("Plants_Physical") then
-            table.insert(candidates, child)
-        end
-    end
-    if #candidates == 0 then
-        warn("❌ Plants_Physical tidak ditemukan.")
-        return nil
-    end
-    if #candidates == 1 then
-        cachedFarm = candidates[1]
-        return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
-    end
-
-    -- Pilih farm yang pemiliknya = username kamu
-    for _, child in ipairs(candidates) do
-        local imp = child:FindFirstChild("Important")
-        local data = imp:FindFirstChild("Data")
-        local ov = data and data:FindFirstChild("Owner")
-        if ov and ov:IsA("StringValue") and ov.Value == LocalPlayer.Name then
-            if cachedFarm ~= child then
-                print("🏡 Farm terdeteksi (owner): " .. ov.Value)
-                cachedFarm = child
-            end
-            return imp:FindFirstChild("Plants_Physical")
-        end
-    end
-
-    -- Fallback: jalur lama
-    local legacy = root:FindFirstChild("Farm")
-    if legacy then
-        local imp = legacy:FindFirstChild("Important")
-        if imp and imp:FindFirstChild("Plants_Physical") then
-            print("🏡 Farm terdeteksi (jalur lama)")
-            cachedFarm = legacy
-            return imp:FindFirstChild("Plants_Physical")
-        end
-    end
-
-    warn("⚠️ Farm milikmu belum terdeteksi. Klik '🔄 Refresh Data' di tab Anubis.")
-    cachedFarm = candidates[1]
-    return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
+    local p = Workspace:FindFirstChild("Farm")
+    p = p and p:FindFirstChild("Farm")
+    p = p and p:FindFirstChild("Important")
+    p = p and p:FindFirstChild("Plants_Physical")
+    return p
 end
 
 local function collectMutations(obj)
@@ -660,31 +615,6 @@ local SPIDER_WEB_WAVE_TIMEOUT_SECONDS = 120
 local ANUBIS_TIMEOUT_SECONDS = 60
 local ANUBIS_WAIT_MUTATION_THRESHOLD = 10   -- ambang "sisa buah > 10"
 local SHOVEL_MAX_PASSES = 6
-local SHOVEL_DELAY_PER_FRUIT = 0.10
-local SHOVEL_DELAY_PER_PASS  = 0.20
-local SHOVEL_DELAY_FILE = "PriaSoloHUB/shovel_delay.txt"
-
-local function SaveShovelDelay()
-    pcall(function()
-        if type(isfolder) == "function" and not isfolder("PriaSoloHUB") then
-            makefolder("PriaSoloHUB")
-        end
-        writefile(SHOVEL_DELAY_FILE, tostring(SHOVEL_DELAY_PER_FRUIT))
-    end)
-end
-
-local function LoadShovelDelay()
-    local exists = false
-    pcall(function() exists = (type(isfile) == "function" and isfile(SHOVEL_DELAY_FILE) == true) end)
-    if not exists then return false end
-    local v = nil
-    pcall(function() v = tonumber(readfile(SHOVEL_DELAY_FILE)) end)
-    if v then
-        SHOVEL_DELAY_PER_FRUIT = math.clamp(v, 0.03, 0.50)
-        return true
-    end
-    return false
-end
 
 local function debugStep(msg)
     print("🐾 [AutoLevelingAnubis] " .. msg)
@@ -810,19 +740,12 @@ local function shovelFruitsOnTree(treeName, threshold)
     end
     local shovel = equipToolByPrefix("Shovel [Destroy Plants]")
     if not shovel then return end
+    debugStep("Shovel di-equip")
 
-    local perFruit = tonumber(SHOVEL_DELAY_PER_FRUIT) or 0.10
-    local perPass  = tonumber(SHOVEL_DELAY_PER_PASS) or 0.20
-    debugStep("Shovel di-equip (delay " .. perFruit .. "s per 5 buah)")
-
-    local backoff = 1
-    local MAX_PASSES = 6
-
-    for pass = 1, MAX_PASSES do
-        if not anubisLevelingRunning then break end
-
+    for pass = 1, SHOVEL_MAX_PASSES do
         local toShovel = {}
         for _, p in ipairs(scanFruitsOnTree(treeName)) do
+            -- hanya buah sungguhan, bukan favorit, mutasi di bawah threshold
             if p.isFruit ~= false and not isFavoriteMarked(p.instance)
                 and p.mutCount < threshold then
                 table.insert(toShovel, p.instance)
@@ -830,31 +753,12 @@ local function shovelFruitsOnTree(treeName, threshold)
         end
         if #toShovel == 0 then break end
 
-        local before = #toShovel
-        debugStep("Pass " .. pass .. ": " .. before .. " buah < " .. threshold)
-
-        for i, fruit in ipairs(toShovel) do
-            if not anubisLevelingRunning then break end
+        debugStep("Pass " .. pass .. ": " .. #toShovel .. " buah < " .. threshold)
+        for _, fruit in ipairs(toShovel) do
             pcall(function() RemoveItemRemote:FireServer(fruit) end)
-            if i % 5 == 0 and i < before then
-                task.wait(perFruit * backoff)
-            end
+            task.wait(0.3)
         end
-        task.wait(perPass * backoff)
-
-        local stillRemaining = 0
-        for _, p in ipairs(scanFruitsOnTree(treeName)) do
-            if p.isFruit ~= false and not isFavoriteMarked(p.instance)
-                and p.mutCount < threshold then
-                stillRemaining = stillRemaining + 1
-            end
-        end
-        if stillRemaining >= before then
-            backoff = math.min(backoff * 2, 4)
-            debugStep("Shovel di-throttle, backoff x" .. backoff)
-        else
-            backoff = 1
-        end
+        task.wait(0.7)
     end
 
     local backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -2174,18 +2078,6 @@ Anubis_IN_Threshold = ASettings:Input({
         currentCollectThreshold = math.max(tonumber(value) or 10, 0)
     end
 })
-Anubis_IN_ShovelDelay = ASettings:Input({
-    Title = "Shovel Delay per 5 Buah (detik)",
-    Value = tostring(SHOVEL_DELAY_PER_FRUIT),
-    Placeholder = "0.03 - 0.50",
-    Flag = "anubis_shovel_delay",
-    Callback = function(value)
-        local d = tonumber(value) or 0.10
-        SHOVEL_DELAY_PER_FRUIT = math.clamp(d, 0.03, 0.50)
-        SaveShovelDelay()
-        debugStep("Shovel delay diset: " .. SHOVEL_DELAY_PER_FRUIT .. "s")
-    end
-})
 
 ASettings:Space()
 ASettings:Paragraph({
@@ -2196,8 +2088,6 @@ ASettings:Paragraph({
 Anubis_StatusLabel = TabAnubis:Paragraph({ Title = "Status", Desc = "Status: Stopped" })
 
 ASettings:Button({ Title = "🔄 Refresh Data", Justify = "Center", Callback = function()
-    cachedFarm = nil -- paksa redeteksi farm
-    getPlantsPhysical()
     rebuildPetCaches()
     safeCall(Anubis_DD_Anubis, "Refresh", FavOptionsCache)
     safeCall(Anubis_DD_Cornling, "Refresh", FavOptionsCache)
@@ -2334,10 +2224,6 @@ pcall(applySharkUIFromConfig)
 pcall(applyLevelingUIFromConfig)
 pcall(applyPNPUIFromConfig)
 pcall(applyAnubisUIFromConfig)
-if LoadShovelDelay() then
-    safeCall(Anubis_IN_ShovelDelay, "SetValue", tostring(SHOVEL_DELAY_PER_FRUIT))
-    print("✅ Shovel delay dimuat dari file: " .. SHOVEL_DELAY_PER_FRUIT .. "s")
-end
 
 pcall(function() MyConfig:Save() end)
 pcall(function() AnubisConfig:Save() end)
