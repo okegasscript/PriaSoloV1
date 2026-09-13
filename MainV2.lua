@@ -1,13 +1,16 @@
 -- ============================================================
--- PRIA SOLO HUB - ALL IN ONE FINAL (v3)
+-- PRIA SOLO HUB - ALL IN ONE FINAL (v2)
 -- Tab : Auto Shark | Auto Leveling | Auto Leveling Anubis | PNP | Webhook
 -- Notes:
 --   - DataPetModule: SATU SUMBER (PriaSoloV1)
 --   - Webhook: satu settingan (tab Webhook, dipakai semua fitur)
---   - Anubis: fast-swap target, counter abaikan favorit & entry pohon
---   - Shovel cepat (burst 5 + backoff), delay via UI & persisten (file)
---   - BARU v3: Deteksi farm otomatis via pemilik (Important.Data.Owner)
---     + dropdown "Paksa Farm" (manual) + Refresh Data redeteksi farm
+--   - Badge "PSHB" minimize diperbesar
+--   - Dropdown pet seragam & rapi
+--   - Anubis: ClearGarden otomatis sebelum equip Frog/Cornling/Anubis
+--   - Anubis: target selesai -> unequip TARGET saja, Tim Anubis tetap,
+--            lalu equip target baru (fast-swap). Frog/Cornling tidak diulang.
+--   - Anubis: penghitung sisa buah MENGABAIKAN buah favorit & entry pohon
+--   - Cache data pet saat startup
 -- ============================================================
 
 -- ================= SERVICES =================
@@ -32,7 +35,6 @@ local MyConfig = nil
 local AnubisConfig = nil
 local Anubis_AutoToggle, Anubis_AutoBuyToggle, Anubis_StatusLabel
 local Anubis_DD_Anubis, Anubis_DD_Cornling, Anubis_DD_Frog, Anubis_DD_Target, Anubis_DD_Tree
-local Anubis_DD_Farm
 local Anubis_IN_TargetLevel, Anubis_IN_MutCount, Anubis_IN_Threshold, Anubis_IN_ShovelDelay
 local Shark_DD_Shark, Shark_DD_Target, Shark_DD_Mutasi, Shark_DD_Tumbal
 local AL_DD_Tim, AL_DD_Target, AL_IN_TargetLevel
@@ -354,143 +356,57 @@ local espFolder = nil
 local espObjects = {}
 local espConnection = nil
 
--- ==== DETEKSI FARM MILIK SENDIRI (berbasis pemilik: Important.Data.Owner) ====
+-- ==== DETEKSI FARM MILIK SENDIRI (Important.Data.Owner == username) ====
 local cachedFarm = nil
-local SelectedFarmValue = "" -- "" = Auto, else "idx|Nama"
-
-local function hasPlantsPhysical(child)
-    local imp = child and child:FindFirstChild("Important")
-    if imp and imp:FindFirstChild("Plants_Physical") then return imp end
-    return nil
-end
-
--- Nama pemilik farm dari Important.Data.Owner (StringValue) + fallback lain
-local function getFarmOwnerName(child)
-    local imp = child and child:FindFirstChild("Important")
-    if not imp then return nil end
-    local data = imp:FindFirstChild("Data") or imp:FindFirstChild("data")
-    local ov = data and data:FindFirstChild("Owner")
-    if not ov then ov = imp:FindFirstChild("Owner") end
-    if ov then
-        if ov:IsA("StringValue") then return ov.Value end
-        if ov:IsA("ObjectValue") and ov.Value then return ov.Value.Name end
-        if ov:IsA("IntValue") then return tostring(ov.Value) end
-    end
-    return nil
-end
 
 local function getPlantsPhysical()
     local root = Workspace:FindFirstChild("Farm")
     if not root then return nil end
 
-    -- 0) Pilihan manual dari dropdown "Paksa Farm"
-    if SelectedFarmValue ~= "" then
-        local idx = tonumber(SelectedFarmValue:match("^(%d+)|"))
-        local child = idx and root:GetChildren()[idx]
-        local imp = child and hasPlantsPhysical(child)
-        if imp then
+    local candidates = {}
+    for _, child in ipairs(root:GetChildren()) do
+        local imp = child:FindFirstChild("Important")
+        if imp and imp:FindFirstChild("Plants_Physical") then
+            table.insert(candidates, child)
+        end
+    end
+    if #candidates == 0 then
+        warn("❌ Plants_Physical tidak ditemukan.")
+        return nil
+    end
+    if #candidates == 1 then
+        cachedFarm = candidates[1]
+        return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
+    end
+
+    -- Pilih farm yang pemiliknya = username kamu
+    for _, child in ipairs(candidates) do
+        local imp = child:FindFirstChild("Important")
+        local data = imp:FindFirstChild("Data")
+        local ov = data and data:FindFirstChild("Owner")
+        if ov and ov:IsA("StringValue") and ov.Value == LocalPlayer.Name then
             if cachedFarm ~= child then
-                print("🏡 Farm (manual): "
-                    .. tostring(getFarmOwnerName(child) or child.Name))
+                print("🏡 Farm terdeteksi (owner): " .. ov.Value)
                 cachedFarm = child
             end
             return imp:FindFirstChild("Plants_Physical")
         end
-        SelectedFarmValue = "" -- tidak valid, kembali ke Auto
     end
 
-    -- Kumpulkan kandidat (semua child dengan Plants_Physical)
-    local candidates = {}
-    for _, child in ipairs(root:GetChildren()) do
-        if hasPlantsPhysical(child) then table.insert(candidates, child) end
-    end
-    if #candidates == 0 then
-        warn("❌ Plants_Physical tidak ditemukan di mana pun.")
-        return nil
-    end
-    if #candidates == 1 then
-        if cachedFarm ~= candidates[1] then
-            print("🏡 Farm terdeteksi (satu-satunya): " .. candidates[1].Name)
-            cachedFarm = candidates[1]
-        end
-        return hasPlantsPhysical(candidates[1]):FindFirstChild("Plants_Physical")
-    end
-
-    -- 1) Farm milikmu: Important.Data.Owner == username kamu (atau UserId)
-    for _, child in ipairs(candidates) do
-        local owner = getFarmOwnerName(child)
-        if owner == LocalPlayer.Name or owner == tostring(LocalPlayer.UserId) then
-            if cachedFarm ~= child then
-                print("🏡 Farm terdeteksi (owner): " .. owner)
-                cachedFarm = child
-            end
-            return hasPlantsPhysical(child):FindFirstChild("Plants_Physical")
+    -- Fallback: jalur lama
+    local legacy = root:FindFirstChild("Farm")
+    if legacy then
+        local imp = legacy:FindFirstChild("Important")
+        if imp and imp:FindFirstChild("Plants_Physical") then
+            print("🏡 Farm terdeteksi (jalur lama)")
+            cachedFarm = legacy
+            return imp:FindFirstChild("Plants_Physical")
         end
     end
 
-    -- 2) Fallback: child bernama username
-    local byName = root:FindFirstChild(LocalPlayer.Name)
-    if byName and hasPlantsPhysical(byName) then
-        if cachedFarm ~= byName then
-            print("🏡 Farm terdeteksi (nama): " .. byName.Name)
-            cachedFarm = byName
-        end
-        return hasPlantsPhysical(byName):FindFirstChild("Plants_Physical")
-    end
-
-    -- 3) Fallback: farm terdekat dari posisi karakter (posisi nyata BasePart)
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local best, bestDist = nil, math.huge
-        for _, child in ipairs(candidates) do
-            local sum, n = Vector3.new(0, 0, 0), 0
-            local imp = hasPlantsPhysical(child)
-            for _, d in ipairs(imp:GetDescendants()) do
-                if d:IsA("BasePart") then
-                    sum = sum + d.Position
-                    n = n + 1
-                    if n >= 40 then break end
-                end
-            end
-            if n > 0 then
-                local dist = (sum / n - hrp.Position).Magnitude
-                if dist < bestDist then bestDist, best = dist, child end
-            end
-        end
-        if best and bestDist < 200 then
-            if cachedFarm ~= best then
-                print(string.format("🏡 Farm terdeteksi (jarak %.0f studs)", bestDist))
-                cachedFarm = best
-            end
-            return hasPlantsPhysical(best):FindFirstChild("Plants_Physical")
-        end
-    end
-
-    warn("⚠️ Farm milikmu tidak terdeteksi. Pilih manual di dropdown 'Paksa Farm'.")
-    local first = candidates[1]
-    if cachedFarm ~= first then cachedFarm = first end
-    return hasPlantsPhysical(first):FindFirstChild("Plants_Physical")
-end
-
--- Daftar farm untuk dropdown manual (dengan nama pemiliknya)
-local function BuildFarmOptions()
-    local root = Workspace:FindFirstChild("Farm")
-    local opts = { { Title = "🔍 Auto-detect (owner)", Value = "" } }
-    if not root then return opts end
-    for i, child in ipairs(root:GetChildren()) do
-        local imp = hasPlantsPhysical(child)
-        if imp then
-            local count = #imp:FindFirstChild("Plants_Physical"):GetChildren()
-            local owner = getFarmOwnerName(child) or "?"
-            local label = string.format("%d) Farm (%d tanaman) — %s", i, count, owner)
-            if owner == LocalPlayer.Name then
-                label = "⭐ " .. label .. " [MILIKMU]"
-            end
-            table.insert(opts, { Title = label, Value = tostring(i) .. "|" .. child.Name })
-        end
-    end
-    return opts
+    warn("⚠️ Farm milikmu belum terdeteksi. Klik '🔄 Refresh Data' di tab Anubis.")
+    cachedFarm = candidates[1]
+    return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
 end
 
 local function collectMutations(obj)
@@ -681,6 +597,8 @@ local function scanFruitsOnTree(treeName)
     return result
 end
 
+-- Deteksi buah favorit. Nama atribut bisa berbeda antar update game,
+-- jadi dicek beberapa nama umum + child dari Model.
 local FAVORITE_ATTR_NAMES = { "Favorite", "Favorited", "IsFavorite", "Favourite", "isFavorite" }
 
 local function isFavoriteMarked(inst)
@@ -709,7 +627,8 @@ local function findFruitOnTreeByExactMutation(treeName, mutationCount)
     return nil
 end
 
--- HANYA menghitung: buah sungguhan, bukan favorit, mutasi > threshold
+-- SATU-SATUNYA definisi penghitung sisa buah.
+-- Yang dihitung HANYA: buah sungguhan, bukan favorit, dan mutasinya > threshold.
 local function countFruitsOnTreeWithMutationAbove(treeName, threshold, exceptInstance)
     local count = 0
     for _, p in ipairs(scanFruitsOnTree(treeName)) do
@@ -739,14 +658,9 @@ local NOTIF_TIMEOUT_SECONDS = 60
 local SPIDER_WEB_WAVE_TARGET_COUNT = 7
 local SPIDER_WEB_WAVE_TIMEOUT_SECONDS = 120
 local ANUBIS_TIMEOUT_SECONDS = 60
-local ANUBIS_WAIT_MUTATION_THRESHOLD = 10
-local SHOVEL_MAX_PASSES = 6
-
--- Kecepatan shovel (detik)
+local ANUBIS_WAIT_MUTATION_THRESHOLD = 10   -- ambang "sisa buah > 10"
 local SHOVEL_DELAY_PER_FRUIT = 0.10
 local SHOVEL_DELAY_PER_PASS  = 0.20
-
--- Persisten via FILE (bukan WindUI config)
 local SHOVEL_DELAY_FILE = "PriaSoloHUB/shovel_delay.txt"
 
 local function SaveShovelDelay()
@@ -888,16 +802,14 @@ local function stopAutoBuyFavoriteTool()
     print("⏹️ Auto Buy Favorite Tool dihentikan.")
 end
 
-local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
+local function shovelFruitsOnTree(treeName, threshold)
     if not RemoveItemRemote then
         warn("⚠️ Remove_Item remote tidak ditemukan.")
         return
     end
-    perFruitDelay = tonumber(perFruitDelay) or SHOVEL_DELAY_PER_FRUIT
-
     local shovel = equipToolByPrefix("Shovel [Destroy Plants]")
     if not shovel then return end
-    debugStep("Shovel di-equip (delay: " .. perFruitDelay .. "s, burst 5)")
+    debugStep("Shovel di-equip (delay " .. SHOVEL_DELAY_PER_FRUIT .. "s per 5 buah)")
 
     local backoff = 1
 
@@ -914,17 +826,15 @@ local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
         if #toShovel == 0 then break end
 
         local before = #toShovel
-        debugStep("Pass " .. pass .. ": " .. before .. " buah < " .. threshold
-            .. " (backoff x" .. backoff .. ")")
+        debugStep("Pass " .. pass .. ": " .. before .. " buah < " .. threshold)
 
         for i, fruit in ipairs(toShovel) do
             if not anubisLevelingRunning then break end
             pcall(function() RemoveItemRemote:FireServer(fruit) end)
-            if i % 5 == 0 and i < #toShovel then
-                task.wait(perFruitDelay * backoff)
+            if i % 5 == 0 and i < before then
+                task.wait(SHOVEL_DELAY_PER_FRUIT * backoff)
             end
         end
-
         task.wait(SHOVEL_DELAY_PER_PASS * backoff)
 
         local stillRemaining = 0
@@ -936,7 +846,7 @@ local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
         end
         if stillRemaining >= before then
             backoff = math.min(backoff * 2, 4)
-            debugStep("Shovel di-throttle, backoff -> x" .. backoff)
+            debugStep("Shovel di-throttle, backoff x" .. backoff)
         else
             backoff = 1
         end
@@ -946,7 +856,6 @@ local function shovelFruitsOnTree(treeName, threshold, perFruitDelay)
     if backpack and shovel.Parent == LocalPlayer.Character then shovel.Parent = backpack end
     task.wait(0.3)
 end
-
 local function setFruitFavorite(fruitInstance, state)
     if not fruitInstance then return false end
     if not FavoriteToolRemote then
@@ -1062,7 +971,13 @@ local function stopLevelingAnubis()
     debugStep("⏹️ STOP")
 end
 
--- unfavorite SEMUA buah favorit yang tertinggal di pohon target
+-- ============================================================
+-- BARU: unfavorite SEMUA buah favorit yang tertinggal di pohon target
+-- Dipakai di Langkah 1 agar unfav tetap jalan walau referensi in-memory
+-- nil / stale (contoh: favorit dari sesi eksekusi sebelumnya).
+-- onlyMutCount = nil -> unfav SEMUA favorit di pohon tsb
+-- onlyMutCount = angka -> hanya buah dengan mutasi persis segitu (mis. 110)
+-- ============================================================
 local function unfavoriteAllFavoritesOnTree(treeName, onlyMutCount)
     local count = 0
     for _, p in ipairs(scanFruitsOnTree(treeName)) do
@@ -1119,13 +1034,21 @@ local function startLevelingAnubis()
                     while anubisLevelingRunning and currentLevel < targetLevel do
 
                         if not anubisEquipped then
+                            -- ==========================================
                             -- SIKLUS PERSIAPAN PENUH
+                            -- ==========================================
 
+                            -- LANGKAH 1 (REVISI): unfavorite buah target lama
                             anubisSetStatus("Status: Unfavorite buah target sebelumnya...")
+
+                            -- 1a) lepas buah yang masih direferensikan script
                             unfavoritePreviousTargetFruit(favoritedFruitInstance)
                             favoritedFruitInstance = nil
                             if not anubisLevelingRunning then break end
 
+                            -- 1b) BARU: scan pohon target, unfavorite SEMUA sisa buah
+                            --     favorit (termasuk warisan sesi/eksekusi sebelumnya).
+                            --     Dijalankan SEBELUM Frog & Cornling.
                             anubisSetStatus("Status: Scan sisa buah favorit di pohon...")
                             local leftover = unfavoriteAllFavoritesOnTree(tree, nil)
                             if leftover > 0 then
@@ -1135,6 +1058,7 @@ local function startLevelingAnubis()
                             end
                             if not anubisLevelingRunning then break end
 
+                            -- LANGKAH 2 : CLEAR GARDEN -> EQUIP FROG
                             anubisSetStatus("Status: Clear Garden + Equip Frog...")
                             debugStep("Langkah 2: ClearGarden sebelum equip Tim Frog")
                             runClearGarden()
@@ -1161,6 +1085,7 @@ local function startLevelingAnubis()
                             task.wait(0.5)
                             if not anubisLevelingRunning then break end
 
+                            -- LANGKAH 3 : CLEAR GARDEN -> EQUIP CORNLING
                             anubisSetStatus("Status: Clear Garden + Equip Cornling...")
                             debugStep("Langkah 3: ClearGarden sebelum equip Tim Cornling")
                             runClearGarden()
@@ -1176,10 +1101,12 @@ local function startLevelingAnubis()
                             task.wait(0.5)
                             if not anubisLevelingRunning then break end
 
+                            -- LANGKAH 3B
                             anubisSetStatus("Status: Shovel pasca Cornling...")
                             shovelFruitsOnTree(tree, collectThreshold)
                             if not anubisLevelingRunning then break end
 
+                            -- LANGKAH 4
                             anubisSetStatus("Status: Favoritkan buah target mutasi...")
                             local matched = findFruitOnTreeByExactMutation(tree, mutationCount)
                             if matched then
@@ -1193,11 +1120,13 @@ local function startLevelingAnubis()
                             task.wait(0.5)
                             if not anubisLevelingRunning then break end
 
+                            -- LANGKAH 5
                             anubisSetStatus("Status: Shovel buah rendah...")
                             shovelFruitsOnTree(tree, collectThreshold)
                             task.wait(0.5)
                             if not anubisLevelingRunning then break end
 
+                            -- LANGKAH 6 : CLEAR GARDEN -> EQUIP ANUBIS + TARGET
                             anubisSetStatus("Status: Clear Garden + Equip Anubis + Target...")
                             debugStep("Langkah 6: ClearGarden sebelum equip Tim Anubis + Target")
                             runClearGarden()
@@ -1210,7 +1139,9 @@ local function startLevelingAnubis()
                             equipPetListTogether(anubisAndTarget)
                             anubisEquipped = true
                         else
+                            -- ==========================================
                             -- FAST-SWAP: Tim Anubis masih terpasang
+                            -- ==========================================
                             anubisSetStatus("Status: Ganti target (Anubis tetap terpasang)...")
                             debugStep("Fast-swap: equip target baru #" .. targetIndex)
                             equipPetByUUID(targetUUID)
@@ -1220,6 +1151,7 @@ local function startLevelingAnubis()
 
                         anubisSetStatus("Status: Equip Anubis + Target...")
 
+                        -- ================= LOOP TUNGGU =================
                         local anubisStartTime = tick()
                         local reachedDuringAnubis = false
                         local lastDebugAt = 0
@@ -1267,6 +1199,7 @@ local function startLevelingAnubis()
 
                             task.wait(1)
                         end
+                        -- ===============================================
 
                         if reachedDuringAnubis then
                             debugStep("✅ Level tercapai! Unequip TARGET saja, Anubis tetap terpasang.")
@@ -1277,6 +1210,8 @@ local function startLevelingAnubis()
                             break
                         end
 
+                        -- Belum tercapai -> perilaku lama: lepas Anubis + target,
+                        -- ulangi siklus penuh untuk target yang sama
                         local anubisAndTarget = {}
                         for _, uuid in ipairs(anubis) do table.insert(anubisAndTarget, uuid) end
                         table.insert(anubisAndTarget, targetUUID)
@@ -1284,6 +1219,7 @@ local function startLevelingAnubis()
                         anubisEquipped = false
                         task.wait(0.5)
 
+                        -- LANGKAH 7
                         local petDataNow = getPetByUUID(targetUUID)
                         currentLevel = petDataNow and (petDataNow.level or 0) or currentLevel
                         anubisSetStatus(string.format("Status: Leveling... %d/%d",
@@ -2141,25 +2077,6 @@ Anubis_AutoBuyToggle = ASettings:Toggle({
 })
 ASettings:Space()
 
--- v3: DETEKSI/PILIH FARM
-Anubis_DD_Farm = ASettings:Dropdown({
-    Title = "Paksa Farm (pilih kalau Auto salah)",
-    Multi = false, Search = false, AllowNone = false,
-    Values = BuildFarmOptions(), Value = "",
-    Flag = "anubis_farm_manual",
-    Callback = function(selected)
-        local val = selected
-        if type(selected) == "table" and selected.Value then val = selected.Value
-        elseif type(selected) == "table" and #selected > 0 then val = selected[1] end
-        SelectedFarmValue = tostring(val or "")
-        cachedFarm = nil
-        getPlantsPhysical()
-        safeCall(Anubis_DD_Tree, "Refresh", getTreeList())
-        print("🏡 Farm dipilih:", SelectedFarmValue == "" and "Auto-detect" or SelectedFarmValue)
-    end
-})
-ASettings:Space()
-
 Anubis_DD_Tree = ASettings:Dropdown({
     Title = "Pilih Pohon", Multi = false, Search = true, AllowNone = false,
     Values = getTreeList(), Value = "",
@@ -2251,9 +2168,8 @@ Anubis_IN_Threshold = ASettings:Input({
         currentCollectThreshold = math.max(tonumber(value) or 10, 0)
     end
 })
-
 Anubis_IN_ShovelDelay = ASettings:Input({
-    Title = "Shovel Delay per Buah (detik)",
+    Title = "Shovel Delay per 5 Buah (detik)",
     Value = tostring(SHOVEL_DELAY_PER_FRUIT),
     Placeholder = "0.03 - 0.50",
     Flag = "anubis_shovel_delay",
@@ -2274,14 +2190,8 @@ ASettings:Paragraph({
 Anubis_StatusLabel = TabAnubis:Paragraph({ Title = "Status", Desc = "Status: Stopped" })
 
 ASettings:Button({ Title = "🔄 Refresh Data", Justify = "Center", Callback = function()
-    cachedFarm = nil                                  -- v3: paksa redeteksi farm
-    local plants = getPlantsPhysical()                -- deteksi sekarang (berdiri di garden-mu)
-    safeCall(Anubis_DD_Farm, "Refresh", BuildFarmOptions())
-    safeCall(Anubis_DD_Farm, "Select", SelectedFarmValue)
-    if not plants then
-        warn("❌ Farm belum terdeteksi! Berdiri di garden-mu lalu klik Refresh lagi.")
-        return
-    end
+    cachedFarm = nil -- paksa redeteksi farm
+    getPlantsPhysical()
     rebuildPetCaches()
     safeCall(Anubis_DD_Anubis, "Refresh", FavOptionsCache)
     safeCall(Anubis_DD_Cornling, "Refresh", FavOptionsCache)
@@ -2418,8 +2328,6 @@ pcall(applySharkUIFromConfig)
 pcall(applyLevelingUIFromConfig)
 pcall(applyPNPUIFromConfig)
 pcall(applyAnubisUIFromConfig)
-
--- Muat shovel delay dari FILE & tampilkan di UI
 if LoadShovelDelay() then
     safeCall(Anubis_IN_ShovelDelay, "SetValue", tostring(SHOVEL_DELAY_PER_FRUIT))
     print("✅ Shovel delay dimuat dari file: " .. SHOVEL_DELAY_PER_FRUIT .. "s")
@@ -2432,4 +2340,4 @@ if MyConfig:Get("is_running") then task.delay(1, startAutoShark) end
 if MyConfig:Get("is_leveling_running") then task.delay(1, startAutoLeveling) end
 if MyConfig:Get("is_pnp_running") then task.delay(1, startPNP) end
 
-print("✅ Pria Solo HUB (All-in-One FINAL v3) siap digunakan!")
+print("✅ Pria Solo HUB (All-in-One Final v2) siap digunakan!")
