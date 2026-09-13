@@ -811,13 +811,12 @@ local function shovelFruitsOnTree(treeName, threshold)
     local shovel = equipToolByPrefix("Shovel [Destroy Plants]")
     if not shovel then return end
 
-    -- Guard: kalau variabel delay tidak terbaca, pakai default (anti-nil)
     local perFruit = tonumber(SHOVEL_DELAY_PER_FRUIT) or 0.10
     local perPass  = tonumber(SHOVEL_DELAY_PER_PASS) or 0.20
     debugStep("Shovel di-equip (delay " .. perFruit .. "s per 5 buah)")
 
     local backoff = 1
-    local MAX_PASSES = 6 -- hardcoded: tidak bisa nil
+    local MAX_PASSES = 6
 
     for pass = 1, MAX_PASSES do
         if not anubisLevelingRunning then break end
