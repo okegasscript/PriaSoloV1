@@ -363,7 +363,6 @@ local function getPlantsPhysical()
     local root = Workspace:FindFirstChild("Farm")
     if not root then return nil end
 
-    -- Kumpulkan semua garden yang punya Plants_Physical
     local candidates = {}
     for _, child in ipairs(root:GetChildren()) do
         local imp = child:FindFirstChild("Important")
@@ -372,20 +371,18 @@ local function getPlantsPhysical()
         end
     end
     if #candidates == 0 then
-        warn("❌ Plants_Physical tidak ditemukan.")
+        warn("PlantPhysical tidak ditemukan.")
         return nil
     end
 
-    -- Hanya satu garden -> langsung pakai
     if #candidates == 1 then
         if announcedFarm ~= candidates[1] then
             announcedFarm = candidates[1]
-            print("🏡 Garden terdeteksi (satu-satunya): " .. candidates[1].Name)
+            print("[Garden] Terdeteksi (satu-satunya): " .. candidates[1].Name)
         end
         return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
     end
 
-    -- Beberapa garden -> pilih yang pemiliknya = username kamu
     for _, child in ipairs(candidates) do
         local imp = child:FindFirstChild("Important")
         local data = imp:FindFirstChild("Data")
@@ -393,13 +390,13 @@ local function getPlantsPhysical()
         if ov and ov:IsA("StringValue") and ov.Value == LocalPlayer.Name then
             if announcedFarm ~= child then
                 announcedFarm = child
-                print("🏡 Garden kamu terdeteksi (owner): " .. ov.Value)
+                print("[Garden] Kamu terdeteksi (owner): " .. ov.Value)
             end
             return imp:FindFirstChild("Plants_Physical")
         end
     end
 
-    warn("⚠️ Garden milikmu tidak ketemu via Owner, memakai garden pertama.")
+    warn("[Garden] Owner tidak cocok, memakai garden pertama.")
     return candidates[1]:FindFirstChild("Important"):FindFirstChild("Plants_Physical")
 end
 
