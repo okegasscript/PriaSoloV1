@@ -810,11 +810,16 @@ local function shovelFruitsOnTree(treeName, threshold)
     end
     local shovel = equipToolByPrefix("Shovel [Destroy Plants]")
     if not shovel then return end
-    debugStep("Shovel di-equip (delay " .. SHOVEL_DELAY_PER_FRUIT .. "s per 5 buah)")
+
+    -- Guard: kalau variabel delay tidak terbaca, pakai default (anti-nil)
+    local perFruit = tonumber(SHOVEL_DELAY_PER_FRUIT) or 0.10
+    local perPass  = tonumber(SHOVEL_DELAY_PER_PASS) or 0.20
+    debugStep("Shovel di-equip (delay " .. perFruit .. "s per 5 buah)")
 
     local backoff = 1
+    local MAX_PASSES = 6 -- hardcoded: tidak bisa nil
 
-    for pass = 1, SHOVEL_MAX_PASSES do
+    for pass = 1, MAX_PASSES do
         if not anubisLevelingRunning then break end
 
         local toShovel = {}
@@ -833,10 +838,10 @@ local function shovelFruitsOnTree(treeName, threshold)
             if not anubisLevelingRunning then break end
             pcall(function() RemoveItemRemote:FireServer(fruit) end)
             if i % 5 == 0 and i < before then
-                task.wait(SHOVEL_DELAY_PER_FRUIT * backoff)
+                task.wait(perFruit * backoff)
             end
         end
-        task.wait(SHOVEL_DELAY_PER_PASS * backoff)
+        task.wait(perPass * backoff)
 
         local stillRemaining = 0
         for _, p in ipairs(scanFruitsOnTree(treeName)) do
@@ -857,6 +862,7 @@ local function shovelFruitsOnTree(treeName, threshold)
     if backpack and shovel.Parent == LocalPlayer.Character then shovel.Parent = backpack end
     task.wait(0.3)
 end
+
 local function setFruitFavorite(fruitInstance, state)
     if not fruitInstance then return false end
     if not FavoriteToolRemote then
